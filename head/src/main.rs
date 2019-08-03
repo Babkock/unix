@@ -29,46 +29,56 @@ fn main() -> io::Result<()> {
     let stdin = io::stdin();
     let stderr = io::stderr();
 
-    if args.len() > 1 {
-
-        if args[1].as_bytes()[0] == '-' as u8 {
-            if args[1].as_bytes()[1] == 'n' as u8 { // 'n' == lines
-                match args[2].parse::<i32>() {
-                    Ok(n) => {
-                        options.mode = Mode::LINES(n);
-                        figure = n;
-                    },
-                    Err(_e) => {
-                        write!(stderr.lock(), "{}: Argument must be a number: given '{}'\n", args[0], args[2])?;
-                        process::exit(2);
-                    }
-                }
-            }
-            if args[1].as_bytes()[1] == 'c' as u8 { // 'c' == bytes
-                match args[2].parse::<i32>() {
-                    Ok(n) => {
-                        options.mode = Mode::BYTES(n);
-                        figure = n;
-                    },
-                    Err(_e) => {
-                        write!(stderr.lock(), "{}: Argument must be a number, given '{}'\n", args[0], args[2])?;
-                        process::exit(2);
-                    }
-                }
-            }
-        }
+    if args.len() > 2 {
         if (args[2].as_bytes()[0] == '-' as u8) && (args[2].as_bytes()[1] == 'v' as u8) {
             options.verbose = true;
         }
+    }
 
+    if args.len() > 1 {
+        if args[1].as_bytes()[0] == '-' as u8 {
+            if args[1].as_bytes()[1] == 'n' as u8 { // 'n' == lines
+                if args[2].is_empty() == false {
+                    match args[2].parse::<i32>() {
+                        Ok(n) => {
+                            options.mode = Mode::LINES(n);
+                            figure = n;
+                        },
+                        Err(_e) => {
+                            write!(stderr.lock(), "{}: Argument must be a number: given '{}'\n", args[0], args[2])?;
+                            process::exit(2);
+                        }
+                    }
+                }
+                else {
+                    options.mode = Mode::LINES(10);
+                    figure = 10;
+                }
+            }
+            if args[1].as_bytes()[1] == 'c' as u8 { // 'c' == bytes
+                if args[2].is_empty() == false {
+                    match args[2].parse::<i32>() {
+                        Ok(n) => {
+                            options.mode = Mode::BYTES(n);
+                            figure = n;
+                        },
+                        Err(_e) => {
+                            write!(stderr.lock(), "{}: Argument must be a number, given '{}'\n", args[0], args[2])?;
+                            process::exit(2);
+                        }
+                    
+                    }
+                }
+                else {
+                    options.mode = Mode::BYTES(60);
+                    figure = 60;
+                }
+            }
+        }
     }
     else {
-        write!(stderr.lock(), "USAGE: {} [-v] [-c|-n] NUMBER\n", args[0])?;
-        write!(stderr.lock(), "    Read from standard input\n")?;
-        write!(stderr.lock(), "    c - print up until NUMBER of bytes\n")?;
-        write!(stderr.lock(), "    n - print NUMBER of lines\n")?;
-        write!(stderr.lock(), "    v - be verbose\n")?;
-        process::exit(1);
+        options.mode = Mode::LINES(10);
+        figure = 10;
     }
 
     let input = stdin.lock();
@@ -82,3 +92,4 @@ fn main() -> io::Result<()> {
 
     Ok(())
 }
+
