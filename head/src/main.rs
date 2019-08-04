@@ -1,39 +1,39 @@
 #![allow(unused_imports)]
 use std::{env, io, process};
 use std::io::prelude::*;
+use std::io::Read;
 use std::fs::File;
 
 enum Mode {
-    LINES(i32),
-    BYTES(i32)
+    Lines(i32),
+    Bytes(i32)
 }
 
 struct Options {
-    mode: Mode,
-    verbose: bool
+    mode: Mode
 }
 
 impl Default for Options {
     fn default() -> Options {
         Options {
-            mode: Mode::LINES(10),
-            verbose: false
+            mode: Mode::Lines(10)
         }
     }
+}
+
+fn usage() {
+    let args: Vec<_> = env::args().collect();
+    println!("USAGE: {} [-c|-n] NUMBER", args[0]);
+    println!("    -c  print up to NUMBER of bytes");
+    println!("    -n  print up to NUMBER of lines");
+    println!("    -h  show help");
 }
 
 fn main() -> io::Result<()> {
     let args: Vec<_> = env::args().collect();
     let mut options: Options = Default::default();
-    let mut figure: i32 = -1;
     let stdin = io::stdin();
     let stderr = io::stderr();
-
-    if args.len() > 2 {
-        if (args[2].as_bytes()[0] == '-' as u8) && (args[2].as_bytes()[1] == 'v' as u8) {
-            options.verbose = true;
-        }
-    }
 
     if args.len() > 1 {
         if args[1].as_bytes()[0] == '-' as u8 {
@@ -41,8 +41,7 @@ fn main() -> io::Result<()> {
                 if args[2].is_empty() == false {
                     match args[2].parse::<i32>() {
                         Ok(n) => {
-                            options.mode = Mode::LINES(n);
-                            figure = n;
+                            options.mode = Mode::Lines(n);
                         },
                         Err(_e) => {
                             write!(stderr.lock(), "{}: Argument must be a number: given '{}'\n", args[0], args[2])?;
@@ -51,16 +50,14 @@ fn main() -> io::Result<()> {
                     }
                 }
                 else {
-                    options.mode = Mode::LINES(10);
-                    figure = 10;
+                    options.mode = Mode::Lines(10);
                 }
             }
             if args[1].as_bytes()[1] == 'c' as u8 { // 'c' == bytes
                 if args[2].is_empty() == false {
                     match args[2].parse::<i32>() {
                         Ok(n) => {
-                            options.mode = Mode::BYTES(n);
-                            figure = n;
+                            options.mode = Mode::Bytes(n);
                         },
                         Err(_e) => {
                             write!(stderr.lock(), "{}: Argument must be a number, given '{}'\n", args[0], args[2])?;
@@ -70,24 +67,38 @@ fn main() -> io::Result<()> {
                     }
                 }
                 else {
-                    options.mode = Mode::BYTES(60);
-                    figure = 60;
+                    options.mode = Mode::Bytes(60);
                 }
             }
         }
+        if (args[1].as_bytes()[0] == '-' as u8) && (args[1].as_bytes()[1] == 'h' as u8) {
+            usage();
+            process::exit(0);
+        }
     }
     else {
-        options.mode = Mode::LINES(10);
-        figure = 10;
+        options.mode = Mode::Lines(10);
     }
 
-    let input = stdin.lock();
+    let mut input = stdin.lock();
     let mut i: i32 = 0;
-    for line in input.lines() {
-        if i < figure {
-            println!("{}", line.unwrap());
+    match options.mode {
+        Mode::Bytes(n) => {
+            for byte in input.bytes().take(n as usize) {
+                print!("{}", byte.unwrap() as char);
+            }
+        },
+        Mode::Lines(n) => {
+            for line in input.lines() {
+                if i < n {
+                    println!("{}", line.unwrap());
+                    i += 1;
+                }
+                else {
+                    break;
+                }
+            }
         }
-        i += 1;
     }
 
     Ok(())
