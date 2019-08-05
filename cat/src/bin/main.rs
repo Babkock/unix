@@ -1,82 +1,10 @@
 #![allow(unused_imports)]
-#[macro_use]
-extern crate quick_error;
+extern crate cat;
 extern crate clap;
 
-use quick_error::ResultExt;
 use clap::{Arg, App};
-use std::{env, process};
-use std::fs::{metadata, File};
+use cat::*;
 use std::io::{self, stderr, stdin, stdout, BufWriter, Read, Write};
-
-#[cfg(unix)]
-//use unix_socket::UnixStream;
-
-#[derive(PartialEq)]
-enum NumMode {
-    NumNull,
-    NumNonEmpty,
-    NumAll,
-}
-
-quick_error! {
-    #[derive(Debug)]
-    enum Errors {
-        Input(err: io::Error, path: String) {
-            display("cat: {0}: {1}", path, err)
-            context(path: &'a str, err: io::Error) -> (err, path.to_owned())
-            cause(err)
-        }
-
-        Output(err: io::Error) {
-            display("cat: {0}", err) from()
-            cause(err)
-        }
-
-        Filetype(p: String) {
-            display("cat: {0}: unknown filetype", p)
-        }
-
-        Problem(c: usize) {
-            display("cat: {0} problems", c)
-        }
-
-        Dir(p: String) {
-            display("cat: {0}: Is a directory", p)
-        }
-    }
-}
-
-struct Options {
-    number: NumMode,     // Line numbering mode
-    squeeze_blank: bool, // Compress repeated empty lines
-    show_tabs: bool,     // show TAB characters
-    tab: String,         // string to show when show_tabs is on
-    end_of_line: String, // show characters other than \n at line ends
-    nonprint: bool,      // use ^ and M- notation
-}
-
-struct Handle {
-    reader: Box<Read>
-}
-
-/* recognized file types */
-enum Types {
-    Directory,
-    File,
-    Stdin,
-    SymLink,
-    #[cfg(unix)]
-    BlockDevice,
-    #[cfg(unix)]
-    CharDevice,
-    #[cfg(unix)]
-    Fifo,
-    #[cfg(unix)]
-    Socket,
-}
-
-type CatResult<T> = Result<T, Errors>;
 
 fn main() -> io::Result<()> {
     let matches = App::new("cat").about("Concatenate FILE(s), or standard input, to standard output\nReads from stdin if FILE is -")
@@ -168,6 +96,20 @@ fn main() -> io::Result<()> {
         1 => true,
         _ => false
     };
+
+    let mut files: Vec<&str> = Vec::new();
+
+    match matches.values_of("FILE") {
+        None => {
+            files.push("-");
+        },
+        Some(n) => {
+            files = n.collect();
+        }
+    };
+   
+    /* we can now assume files is a vector of files to read, otherwise just '-' noting stdin */
+    
     
     Ok(())
 }
