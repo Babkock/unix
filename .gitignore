@@ -2,3 +2,6 @@
 **/*.rs.bk
 */target
 */target/*
+/build_dir/*
+!/build_dir/binaries_go_here.txt
+

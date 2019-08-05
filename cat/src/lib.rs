@@ -52,12 +52,12 @@ quick_error! {
 
 /// Options for output.
 pub struct Options {
-    number: NumMode,     // Line numbering mode
-    squeeze_blank: bool, // Compress repeated empty lines
-    show_tabs: bool,     // show TAB characters
-    tab: String,         // string to show when show_tabs is on
-    end_of_line: String, // show characters other than \n at line ends
-    nonprint: bool,      // use ^ and M- notation
+    pub number: NumMode,     // Line numbering mode
+    pub squeeze_blank: bool, // Compress repeated empty lines
+    pub show_tabs: bool,     // show TAB characters
+    pub tab: String,         // string to show when show_tabs is on
+    pub end_of_line: String, // show characters other than \n at line ends
+    pub show_nonprint: bool, // use ^ and M- notation
 }
 
 pub struct Handle {
@@ -154,13 +154,13 @@ pub fn open(path: &str) -> CatResult<Handle> {
 /// were encountered, or an error with the number of errors encountered
 ///
 /// Takes a vector of file paths as an argument.
-pub fn write_fast(files: Vec<String>) -> CatResult<()> {
+pub fn write_fast(files: Vec<&str>) -> CatResult<()> {
     let mut writer = stdout();
     let mut in_buf = [0; 1024 * 64];
     let mut error_count = 0;
 
     for file in files {
-        match open(&file[..]) {
+        match open(&file) {
             Ok(mut handle) => while let Ok(n) = handle.reader.read(&mut in_buf) {
                 if n == 0 {
                     break;
@@ -189,7 +189,7 @@ pub struct OutputState {
 /// if no errors were encountered, or an error with the number of
 /// errors encountered.
 
-pub fn write_lines(files: Vec<String>, options: &Options) -> CatResult<()> {
+pub fn write_lines(files: Vec<&str>, options: &Options) -> CatResult<()> {
     let mut error_count = 0;
     let mut state = OutputState {
         line_number: 1,
@@ -253,7 +253,7 @@ pub fn write_file_lines(file: &str, options: &Options, state: &mut OutputState) 
             }
 
             // print to end of line, or buffer
-            let offset = if options.nonprint {
+            let offset = if options.show_nonprint {
                 write_nonprint_to_end(&in_buf[pos..], &mut writer, options.tab.as_bytes())
             } else if options.show_tabs {
                 write_tab_to_end(&in_buf[pos..], &mut writer)
