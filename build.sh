@@ -8,6 +8,8 @@ if [ -z $1 ]; then
 		if [ $? == 0 ]; then
 			if [ $i == "cat" ]; then
 				cp "target/release/main" ../build/cat
+			elif [ $i == "ls" ]; then
+				cp "target/release/main" ../build/ls
 			else
 				cp "target/release/$i" ../build
 			fi
@@ -27,6 +29,8 @@ else
 			if [ $? == 0 ]; then
 				if [ $i == "cat" ]; then
 					cp "target/release/main" ../build/cat
+				elif [ $i == "ls" ]; then
+					cp "target/release/main" ../build/ls
 				else
 					cp "target/release/$i" ../build
 				fi
