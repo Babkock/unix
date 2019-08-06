@@ -1,5 +1,5 @@
 #!/bin/bash
-declare -a programs=("cat" "echo" "head")
+declare -a programs=("cat" "echo" "head" "ls")
 if [ -z $1 ]; then
 	for i in "${programs[@]}"; do
 		pushd "$i" > /dev/null
@@ -7,16 +7,18 @@ if [ -z $1 ]; then
 		cargo build --release
 		if [ $? == 0 ]; then
 			if [ $i == "cat" ]; then
-				cp "target/release/main" ../build_dir/cat
+				cp "target/release/main" ../build/cat
 			else
-				cp "target/release/$i" ../build_dir
+				cp "target/release/$i" ../build
 			fi
 		else
 			popd > /dev/null
-			printf "\e[91mOne or more programs failed to build\n" > /dev/stderr
+			printf "\e[91;1mOne or more programs failed to build\n" > /dev/stderr
 			exit 1
 		fi
 		popd > /dev/null
 	done
+else
+
 fi
 

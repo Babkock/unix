@@ -13,7 +13,7 @@ fn main() -> io::Result<()> {
              .index(1)
              .multiple(true))
         .arg(Arg::with_name("show-all")
-            .short("a")
+            .short("A")
             .long("show-all")
             .help("equivalent to -vET")
             .takes_value(false))
