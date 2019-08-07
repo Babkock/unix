@@ -266,11 +266,37 @@ pub fn should_display(entry: &DirEntry, options: &Options) -> bool {
 }
 
 pub fn enter_directory(dir: &PathBuf, options: &Options) {
+    let mut entries =
+        safe_unwrap!(fs::read_dir(dir).and_then(|e| e.collect::<Result<Vec<_>, _>>()));
 
+    entries.retain(|e| should_display(e, &options));
+
+    let mut entries: Vec<_> = entries.iter().map(DirEntry::path).collect();
+    sort_entries(&mut entries, &options);
+
+    if options.show_hidden {
+        let mut display_entries = entries.clone();
+        display_entries.insert(0, dir.join(".."));
+        display_entries.insert(0, dir.join("."));
+        display_items(&display_entries, Some(dir), &options);
+    } else {
+        display_items(&entries, Some(dir), &options);
+    }
+
+    if options.recurse {
+        for e in entries.iter().filter(|p| p.is_dir()) {
+            println!("\n{}:", e.to_string_lossy());
+            enter_directory(&e, &options);
+        }
+    }
 }
 
 pub fn get_metadata(entry: &PathBuf, options: &Options) -> io::Result<Metadata> {
-
+    if options.dereference {
+        entry.metadata().or(entry.symlink_metadata())
+    } else {
+        entry.symlink_metadata()
+    }
 }
 
 pub fn display_dir_entry_size(entry: &PathBuf, options: &Options) -> (usize, usize) {
@@ -342,7 +368,7 @@ pub fn display_items(items: &Vec<PathBuf>, strip: Option<&Path>, options: Option
         for i in items {
             let m = get_metadata(i, &options);
             if let Ok(m) = m {
-                println!("{}", display_file_name(&i, strip, &md, &options).contents);
+                println!("{}", display_file_name(&i, strip, &m, &options).contents);
             }
         }
     }
@@ -364,6 +390,211 @@ pub fn display_item_long(
         Ok(m) => m
     };
 
-    // todo
+    println!(
+        "{}{}{} {} {} {} {} {} {}",
+        get_inode(&m, &options),
+        display_file_type(m.file_type()),
+        display_permissions(&m),
+        pad_left(display_symlink_count(&m), max_links),
+        display_uname(&m, &options),
+        display_group(&m, &options),
+        pad_left(display_file_size(&m, &options), max_size),
+        display_date(&m, &options),
+        display_file_name(&item, strip, &m, &options).contents
+    );
+}
+
+#[cfg(unix)]
+pub fn get_inode(metadata: &Metadata, options: &Options) -> String {
+    if options.inode {
+        format!("{:8} ", metadata.ino())
+    } else {
+        "".to_string()
+    }
+}
+
+#[cfg(not(unix))]
+pub fn get_inode(_metadata: &Metadata, _options: &Options) -> String {
+    "".to_string()
+}
+
+// ----- todo --- right here ----
+
+#[cfg(unix)]
+pub fn display_uname(metadata: &Metadata, options: &Options) -> String {
+    if options.numeric_ids {
+        metadata.uid().to_string()
+    } else {
+        uid2usr(metadata.uid()).unwrap_or(metadata.uid().to_string())
+    }
+}
+
+#[cfg(unix)]
+pub fn display_group(metadata: &Metadata, options: &Options) -> String {
+    if options.numeric_ids {
+        metadata.gid().to_string()
+    } else {
+        gid2grp(metadata.gid()).unwrap_or(metadata.gid().to_string())
+    }
+}
+
+#[cfg(not(unix))]
+#[allow(unused_variables)]
+pub fn display_uname(metadata: &Metadata, _options: &Options) -> String {
+    "somebody".to_string()
+}
+
+#[cfg(not(unix))]
+pub fn display_group(metadata: &Metadata, _options: &Options) -> String {
+    "somegroup".to_string()
+}
+
+#[cfg(unix)]
+pub fn display_date(metadata: &Metadata, options: &Options) -> String {
+    let secs = if options.sort_by_ctime {
+        metadata.ctime()
+    } else {
+        metadata.mtime()
+    };
+    let time = time::at(Timespec::new(secs, 0));
+    strftime("%F %R", &time).unwrap()
+}
+
+#[cfg(not(unix))]
+#[allow(unused_variables)]
+pub fn display_date(metadata, &Metadata, options: &Options) -> String {
+    if let Ok(mtime) = metadata.modified() {
+        let time = time::at(Timespec::new(
+            mtime
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as i64,
+            0,
+        ));
+        strftime("%F %R", &time).unwrap()
+    } else {
+        "???".to_string()
+    }
+}
+
+pub fn display_file_size(metadata: &Metadata, options: &Options) -> String {
+
+}
+
+pub fn display_file_type(file_type: FileType) -> String {
+    if file_type.is_dir() {
+        "d".to_string()
+    } else if file_type.is_symlink() {
+        "l".to_string()
+    } else {
+        "-".to_string()
+    }
+}
+
+pub fn get_file_name(name: &Path, strip: Option<&Path>) -> String {
+
+}
+
+#[cfg(not(unix))]
+pub fn display_file_name(
+    path: &Path,
+    strip: Option<&Path>,
+    metadata: &Metadata,
+    options: &Options
+) -> Cell {
+    let mut name = get_file_name(path, strip);
+
+    if !options.long_listing {
+        name = get_inode(metadata, &options) + &name;
+    }
+
+    if options.classify {
+        let file_type = metadata.file_type();
+        if file_type.is_dir() {
+            name.push('/');
+        } else if file_type.is_symlink() {
+            name.push('@');
+        }
+    }
+
+    if options.long_listing && metadata.file_type().is_symlink() {
+        if let Ok(target) = path.read_link() {
+            let target_name = target.to_string_lossy().to_string();
+            name.push_str(" -> ");
+            name.push_str(&target_name);
+        }
+    }
+
+    name.into()
+}
+
+#[cfg(unix)]
+pub fn color_name(name: String, typ: &str) -> String {
+    let mut typ = typ;
+    if !COLOR_MAP.contains_key(typ) {
+        if typ == "or" {
+            typ = "ln";
+        } else if typ == "mi" {
+            typ = "fi";
+        }
+    };
+    if let Some(code) = COLOR_MAP.get(typ) {
+        format!(
+            "{}{}{}{}{}{}{}{}",
+            *LEFT_CODE,
+            code,
+            *RIGHT_CODE,
+            name,
+            *END_CODE,
+            *LEFT_CODE,
+            *RESET_CODE,
+            *RIGHT_CODE
+        )
+    } else {
+        name
+    }
+}
+
+#[cfg(unix)]
+macro_rules! has {
+    ($mode:expr, $perm:expr) => (
+        $mode & ($perm as mode_t) != 0
+    )
+}
+
+#[cfg(unix)]
+pub fn display_file_name(
+    path: &Path,
+    strip: Option<&Path>,
+    metadata: &Metadata,
+    options: &Options
+) -> Cell {
+    let mut name = get_file_name(path, strip);
+    if !options.long_listing {
+        name = get_inode(metadata, &options) + &name;
+    }
+    let mut width = UnicodeWidthStr::width(&*name);
+
+    let color = options.color;
+    let classify = options.classify;
+    let ext;
+
+    if color || classify {
+        let file_type = metadata.file_type();
+
+        // todo...
+
+    }
+}
+
+#[cfg(not(unix))]
+#[allow(unused_variables)]
+pub fn display_symlink_count(metadata: &Metadata) -> String {
+    String::from("1")
+}
+
+#[cfg(unix)]
+pub fn display_symlink_count(metadata: &Metadata) -> String {
+    metadata.nlink().to_string()
 }
 
