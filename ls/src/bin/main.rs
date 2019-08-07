@@ -1,12 +1,10 @@
+#![allow(unused_imports)]
 extern crate ls;
 extern crate clap;
 
 use clap::{Arg, App};
 use ls::*;
 use std::io;
-
-//mod file;
-//mod display;
 
 fn main() -> io::Result<()> {
     let matches = App::new("ls").about("List information about the FILEs (the current directory by default)\nSort entries alphabetically if none of -cftuvSUX nor --sort is specified.")
@@ -112,5 +110,128 @@ fn main() -> io::Result<()> {
              .required(false)
              .takes_value(true))
         .get_matches();
+
+    let show_hidden: bool = match matches.occurrences_of("a") {
+        0 => false,
+        1 => true,
+        _ => false
+    };
+    let ignore_implied: bool = match matches.occurrences_of("A") {
+        0 => false,
+        1 => true,
+        _ => false
+    };
+    let dirs_themselves: bool = match matches.occurrences_of("d") {
+        0 => false,
+        1 => true,
+        _ => false
+    };
+    let long_listing: bool = match matches.occurrences_of("l") {
+        0 => false,
+        1 => true,
+        _ => false
+    };
+    let dereference: bool = match matches.occurrences_of("L") {
+        0 => false,
+        1 => true,
+        _ => false
+    };
+    let reverse: bool = match matches.occurrences_of("r") {
+        0 => false,
+        1 => true,
+        _ => false
+    };
+    let recurse: bool = match matches.occurrences_of("R") {
+        0 => false,
+        1 => true,
+        _ => false
+    };
+    let sort_by_mtime: bool = match matches.occurrences_of("t") {
+        0 => false,
+        1 => true,
+        _ => false
+    };
+    let sort_by_ctime: bool = match matches.occurrences_of("c") {
+        0 => false,
+        1 => true,
+        _ => false
+    };
+    let sort_by_size: bool = match matches.occurrences_of("S") {
+        0 => false,
+        1 => true,
+        _ => false
+    };
+    let no_sort: bool = match matches.occurrences_of("U") {
+        0 => false,
+        1 => true,
+        _ => false
+    };
+    let ignore_backups: bool = match matches.occurrences_of("B") {
+        0 => false,
+        1 => true,
+        _ => false
+    };
+    let numeric_ids: bool = match matches.occurrences_of("n") {
+        0 => false,
+        1 => true,
+        _ => false
+    };
+    let one_file_per_line: bool = match matches.occurrences_of("1") {
+        0 => false,
+        1 => true,
+        _ => false
+    };
+    let human_readable: bool = match matches.occurrences_of("h") {
+        0 => false,
+        1 => true,
+        _ => false
+    };
+    let classify: bool = match matches.occurrences_of("F") {
+        0 => false,
+        1 => true,
+        _ => false
+    };
+    let color: bool = match matches.occurrences_of("color") {
+        0 => false,
+        1 => true,
+        _ => false
+    };
+
+    let mut dirs: Vec<&str> = Vec::new();
+
+    match matches.value_of("DIRECTORY") {
+        None => {
+            dirs.push(".");
+        },
+        Some(n) => {
+            dirs = n.collect();
+        }
+    };
+
+    let options: Options = Options {
+        dirs,
+        show_hidden,
+        ignore_implied,
+        dirs_themselves,
+        long_listing,
+        dereference,
+        reverse,
+        recurse,
+
+        sort_by_mtime,
+        sort_by_ctime,
+        sort_by_size,
+        no_sort,
+        ignore_backups,
+
+        numeric_ids,
+        one_file_per_line,
+        human_readable,
+        classify,
+        color
+    };
+
+    list(options);
+    Ok(())
 }
 

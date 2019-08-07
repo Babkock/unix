@@ -12,4 +12,4 @@ termsize = "0.1.6"
 time = "0.1.40"
 lazy_static = "1.0.1"
 unicode-width = "0.1.5"
-
+libc = "0.2"
