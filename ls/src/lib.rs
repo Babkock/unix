@@ -14,12 +14,19 @@ use term_grid::{Cell, Direction, Filling, Grid, GridOptions};
 use time::{strftime, Timespec};
 #[cfg(unix)]
 use libc::{mode_t, S_ISGID, S_ISUID, S_ISVTX, S_IWOTH, S_IXGRP, S_IXOTH, S_IXUSR};
+use libc::{time_t, c_char, c_int, gid_t, uid_t};
+use libc::{getgrgid, getgrnam, getgroups, getpwnam, getpwuid, group, passwd};
 
-use std::{io, fs};
+use std::{io, fs, ptr};
 use std::time::UNIX_EPOCH;
+use std::io::ErrorKind;
+use std::io::Error as IOError;
+use std::io::Result as IoResult;
 use std::fs::{DirEntry, FileType, Metadata};
 use std::path::{Path, PathBuf};
 use std::cmp::Reverse;
+use std::ffi::{CStr, CString};
+use std::borrow::Cow;
 #[cfg(unix)]
 use std::collections::HashMap;
 
@@ -32,6 +39,120 @@ use std::os::unix::fs::MetadataExt;
 use std::os::unix::fs::FileTypeExt;
 #[cfg(unix)]
 use unicode_width::UnicodeWidthStr;
+
+extern "C" {
+    fn getgrouplist(
+        name: *const c_char,
+        gid: gid_t,
+        groups: *mut gid_t,
+        ngroups: *mut c_int
+    ) -> c_int;
+}
+
+pub fn get_groups() -> IOResult<Vec<gid_t>> {
+    let ngroups = unsafe { getgroups(0, ptr::null_mut()) };
+    if ngroups == -1 {
+        return Err(IOError::last_os_error());
+    }
+    // todo...
+}
+
+macro_rules! cstr2cow {
+    ($v:expr) => (
+        unsafe { CStr::from_ptr($v).to_string_lossy() }
+    )
+}
+
+pub struct Passwd {
+    inner: passwd
+}
+
+impl Passwd {
+    pub fn name(&self) -> Cow<str> {
+        cstr2cow!(self.inner.pw_name)
+    }
+
+    pub fn uid(&self) -> uid_t {
+        self.inner.pw_uid
+    }
+
+    pub fn gid(&self) -> gid_t {
+        self.inner.pw_gid
+    }
+
+    pub fn user_info(&self) -> Cow<str> {
+        cstr2cow!(self.inner.pw_gecos)
+    }
+
+    pub fn user_shell(&self) -> Cow<str> {
+        cstr2cow!(self.inner.pw_shell)
+    }
+
+    pub fn user_dir(&self) -> Cow<str> {
+        cstr2cow!(self.inner.pw_dir)
+    }
+
+    pub fn user_passwd(&self) -> Cow<str> {
+        cstr2cow!(self.inner.pw_passwd)
+    }
+
+    #[cfg(any(target_os = "freebsd", target_os = "macos"))]
+    pub fn user_access_class(&self) -> Cow<str> {
+        cstr2cow!(self.inner.pw_class)
+    }
+
+    pub fn as_inner(&self) -> &passwd {
+        &self.inner
+    }
+
+    pub fn into_inner(self) -> passwd {
+        self.inner
+    }
+
+    pub fn belongs_to(&self) -> Vec<gid_t> {
+        let mut ngroups: c_int = 8;
+        let mut groups = Vec::with_capacity(ngroups as usize);
+        let gid = self.inner.pw_gid;
+        let name = self.inner.pw_name;
+        unsafe {
+            if getgrouplist(name, gid, groups.as_mut_ptr(), &mut ngroups) == -1 {
+                groups.resize(ngroups as usize, 0);
+                getgrouplist(name, gid, groups.as_mut_ptr(), &mut ngroups);
+            }
+            groups.set_len(ngroups as usize);
+        }
+        groups.truncate(ngroups as usize);
+        groups
+    }
+}
+
+pub struct Group {
+    inner: group
+}
+
+impl Group {
+    pub fn name(&self) -> Cow<str> {
+        cstr2cow!(self.inner.gr_name)
+    }
+
+    pub fn gid(&self) -> gid_t {
+        self.inner.gr_gid
+    }
+
+    pub fn as_inner(&self) -> &group {
+        &self.inner
+    }
+
+    pub fn into_inner(self) -> group {
+        self.inner
+    }
+}
+
+pub trait Locate<K> {
+    fn locate(key: K) -> IOResult<Self>
+    where
+        Self: ::std::marker::Sized;
+}
 
 pub struct Options {
     pub dirs: Vec<String>,   // "required" arg, comes with no option
@@ -419,7 +540,19 @@ pub fn get_inode(_metadata: &Metadata, _options: &Options) -> String {
     "".to_string()
 }
 
-// ----- todo --- right here ----
+/* we're defining the f macro later */
+f!(getpwnam, getpwuid, uid_t, Passwd);
+f!(getgrnam, getgrgid, gid_t, Group);
+
+#[inline]
+pub fn uid2usr(id: uid_t) -> IOResult<String> {
+
+}
+
+#[inline]
+pub fn gid2grp(id: gid_t) -> IOResult<String> {
+
+}
 
 #[cfg(unix)]
 pub fn display_uname(metadata: &Metadata, options: &Options) -> String {
@@ -479,7 +612,14 @@ pub fn display_date(metadata: &Metadata, options: &Options) -> String {
 }
 
 pub fn display_file_size(metadata: &Metadata, options: &Options) -> String {
-
+    if options.human_readable {
+        match decimal_prefix(metadata.len() as f64) {
+            Standalone(bytes) => bytes.to_string(),
+            Prefixed(prefix, bytes) => format!("{:.2}{}", bytes, prefix).to_uppercase()
+        }
+    } else {
+        metadata.len().to_string()
+    }
 }
 
 pub fn display_file_type(file_type: FileType) -> String {
@@ -493,7 +633,14 @@ pub fn display_file_type(file_type: FileType) -> String {
 }
 
 pub fn get_file_name(name: &Path, strip: Option<&Path>) -> String {
-
+    let mut name = match strip {
+        Some(prefix) => name.strip_prefix(prefix).unwrap_or(name),
+        None => name,
+    };
+    if name.as_os_str().len() == 0 {
+        name = Path::new(".");
+    }
+    name.to_string_lossy().into_owned()
 }
 
 #[cfg(not(unix))]
@@ -583,8 +730,77 @@ pub fn display_file_name(
     if color || classify {
         let file_type = metadata.file_type();
 
-        // todo...
+        let (code, sym) = if file_type.is_dir() {
+            ("dir", Some('/'))
+        } else if file_type.is_symlink() {
+            if path.exists() {
+                ("ln", Some('@'))
+            } else {
+                ("or", Some('@'))
+            }
+        } else if file_type.is_socket() {
+            ("so", Some('='))
+        } else if file_type.is_fifo() {
+            ("pi", Some('|'))
+        } else if file_type.is_block_device() {
+            ("bd", None)
+        } else if file_type.is_char_device() {
+            ("cd", None)
+        } else if file_type.is_file() {
+            let mode = metadata.mode() as mode_t;
+            let sym = if has!(mode, S_IXUSR | S_IXGRP | S_IXOTH) {
+                Some('*')
+            } else {
+                None
+            };
+            if has!(mode, S_ISUID) {
+                ("su", sym)
+            } else if has!(mode, S_ISGID) {
+                ("sg", sym)
+            } else if has!(mode, S_ISVTX) && has!(mode, S_IWOTH) {
+                ("tw", sym)
+            } else if has!(mode, S_ISVTX) {
+                ("st", sym)
+            } else if has!(mode, S_IWOTH) {
+                ("ow", sym)
+            } else if has!(mode, S_IXUSR | S_IXGRP | S_IXOTH) {
+                ("ex", sym)
+            } else if metadata.nlink() > 1 {
+                ("mh", sym)
+            } else if let Some(e) = path.extension() {
+                ext = format!("*.{}", e.to_string_lossy());
+                (ext.as_str(), None)
+            } else {
+                ("fi", None)
+            }
+        } else {
+            ("", None)
+        };
 
+        if color {
+            name = color_name(name, code);
+        }
+        if classify {
+            if let Some(s) = sym {
+                name.push(s);
+                width += 1;
+            }
+        }
+    }
+
+    if options.long_listing && metadata.file_type().is_symlink() {
+        if let Ok(target) = path.read_link() {
+            // Don't bother updating width here because it's not used
+            let code = if target.exists() { "fi" } else { "mi" };
+            let target_name = color_name(target.to_string_lossy().to_string(), code);
+            name.push_str(" -> ");
+            name.push_str(&target_name);
+        }
+    }
+
+    Cell {
+        contents: name,
+        width: width
     }
 }
 
