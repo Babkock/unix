@@ -1,6 +1,6 @@
 # unix
 
-[![Build status](https://ci.appveyor.com/api/projects/status/4j1ho78h1npu9253?svg=true)](https://ci.appveyor.com/project/Babkock/unix) [![dependency status](https://deps.rs/repo/github/Babkock/unix/status.svg)](https://deps.rs/repo/github/Babkock/unix) [![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2FBabkock%2Funix.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2FBabkock%2Funix?ref=badge_shield)
+[![Build status](https://ci.appveyor.com/api/projects/status/4j1ho78h1npu9253?svg=true)](https://ci.appveyor.com/project/Babkock/unix) [![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2FBabkock%2Funix.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2FBabkock%2Funix?ref=badge_shield)
 [![](https://tokei.rs/b1/github/Babkock/unix)](https://github.com/XAMPPRocky/tokei)
 
 This is a variety of GNU coreutils re-implemented in Rust. These examples aim to be efficient, fast, and less complicated.
@@ -12,8 +12,3 @@ To compile all of the programs, run the `build.sh` script. You can also compile 
 ```
 
 The compiled and stripped release binaries will be copied to the `build` directory.
-
-
-
-## License
-[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2FBabkock%2Funix.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2FBabkock%2Funix?ref=badge_large)
