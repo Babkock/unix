@@ -15,7 +15,8 @@ use time::{strftime, Timespec};
 #[cfg(unix)]
 use libc::{mode_t, S_ISGID, S_ISUID, S_ISVTX, S_IWOTH, S_IXGRP, S_IXOTH, S_IXUSR};
 
-use std::fs;
+use std::{io, fs};
+use std::time::UNIX_EPOCH;
 use std::fs::{DirEntry, FileType, Metadata};
 use std::path::{Path, PathBuf};
 use std::cmp::Reverse;
@@ -150,5 +151,219 @@ pub fn display_permissions_unix(mode: u32) -> String {
 }
 
 pub fn list(options: Options) {
+    let locs: Vec<String> = if options.dirs[0] == "." {
+        vec![String::from(".")]
+    } else {
+        options.dirs.iter().cloned().collect()
+    };
+
+    let mut sfiles = Vec::<PathBuf>::new();
+    let mut sdirs = Vec::<PathBuf>::new();
+    for loc in locs {
+        let p = PathBuf::from(&loc);
+        let mut dir = false;
+
+        if p.is_dir() && !options.dirs_themselves {
+            dir = true;
+            if options.long_listing && !(options.dereference) {
+                if let Ok(md) = p.symlink_metadata() {
+                    if md.file_type().is_symlink() && !p.ends_with("/") {
+                        dir = false;
+                    }
+                }
+            }
+        }
+        if dir {
+            sdirs.push(p);
+        } else {
+            sfiles.push(p);
+        }
+    }
+    sort_entries(&mut sfiles, &options);
+    display_items(&sfiles, None, &options);
+
+    sort_entries(&mut sdirs, &options);
+    for d in sdirs {
+        if options.dirs.len() > 1 {
+            println!("\n{}:", d.to_string_lossy());
+        }
+        enter_directory(&d, &options);
+    }
+}
+
+#[cfg(unix)]
+pub fn sort_entries(entries: &mut Vec<PathBuf>, options: &Options) {
+    let mut rev = options.reverse;
+    if options.sort_by_mtime {
+        if options.sort_by_ctime {
+            entries.sort_by_key(|k| {
+                Reverse(
+                    get_metadata(k, &options).map(|md| md.ctime()).unwrap_or(0)
+                )
+            });
+        } else {
+            entries.sort_by_key(|k| {
+                Reverse(
+                    get_metadata(k, &options).and_then(|md| md.modified())
+                        .unwrap_or(UNIX_EPOCH)
+                )
+            })
+        }
+    } else if options.sort_by_size {
+        entries.sort_by_key(|k| {
+            get_metadata(k, &options).map(|md| md.size()).unwrap_or(0)
+        });
+        rev = !rev;
+    } else if options.no_sort {
+        entries.sort();
+    }
+
+    if rev {
+        entries.reverse();
+    }
+}
+
+#[cfg(windows)]
+pub fn sort_entries(entries: &mut Vec<PathBuf>, options: &Options) {
+    let mut rev = options.reverse;
+    if options.sort_by_mtime {
+        entries.sort_by_key(|k| {
+            Reverse(
+                get_metadata(k, &options).and_then(|md| md.modified())
+                    .unwrap_or(UNIX_EPOCH)
+            )
+        });
+    } else if options.sort_by_ctime {
+        entries.sort_by_key(|k| {
+            get_metadata(k, &options).map(|md| md.file_size()).unwrap_or(0)
+        });
+        rev = !rev;
+    } else if !options.no_sort {
+        entries.sort();
+    }
+
+    if rev {
+        entries.reverse();
+    }
+}
+
+pub fn max(l: usize, r: usize) -> usize {
+    if l > r { l } else { r }
+}
+
+pub fn should_display(entry: &DirEntry, options: &Options) -> bool {
+    let ffi_name = entry.file_name();
+    let name = ffi_name.to_string_lossy();
+    if !options.show_hidden && !options.ignore_implied {
+        if name.starts_with('.') {
+            return false;
+        }
+    }
+    if options.ignore_backups && name.ends_with('~') {
+        return false;
+    }
+    return true;
+}
+
+pub fn enter_directory(dir: &PathBuf, options: &Options) {
 
 }
+
+pub fn get_metadata(entry: &PathBuf, options: &Options) -> io::Result<Metadata> {
+
+}
+
+pub fn display_dir_entry_size(entry: &PathBuf, options: &Options) -> (usize, usize) {
+    if let Ok(md) = get_metadata(entry, options) {
+        (
+            display_symlink_count(&md).len(),
+            display_file_size(&md, &options).len()
+        )
+    } else {
+        (0, 0)
+    }
+}
+
+pub fn pad_left(string: String, count: usize) -> String {
+    if count > string.len() {
+        let pad = count - string.len();
+        let pad = String::from_utf8(vec![' ' as u8; pad]).unwrap();
+        format!("{}{}", pad, string)
+    } else {
+        string
+    }
+}
+
+pub fn display_items(items: &Vec<PathBuf>, strip: Option<&Path>, options: Options) {
+    if options.long_listing || options.numeric_ids {
+        let (mut max_links, mut max_size) = (1, 1);
+        for i in items {
+            let (links, size) = display_dir_entry_size(i, &options);
+            max_links = max(links, max_links);
+            max_size = max(size, max_size);
+        }
+        for i in items {
+            display_item_long(i, strip, max_links, max_size, &options);
+        }
+    } else {
+        if !options.one_file_per_line {
+            let names = items.iter().filter_map(|i| {
+                let m = get_metadata(i, &options);
+                match m {
+                    Err(e) => {
+                        let filename = get_file_name(i, strip);
+                        show_error!("{}: {}", filename, e);
+                        None
+                    }
+                    Ok(m) => {
+                        Some(display_file_name(&i, strip, &m, &options))
+                    }
+                }
+            });
+
+            if let Some(size) = termsize::get() {
+                let mut grid = Grid::new(GridOptions {
+                    filling: Filling::Spaces(2),
+                    direction: Direction::TopToBottom
+                });
+
+                for n in names {
+                    grid.add(n);
+                }
+
+                if let Some(output) = grid.fit_into_width(size.cols as usize) {
+                    print!("{}", output);
+                    return;
+                }
+            }
+        }
+
+        /* couldn't display a grid */
+        for i in items {
+            let m = get_metadata(i, &options);
+            if let Ok(m) = m {
+                println!("{}", display_file_name(&i, strip, &md, &options).contents);
+            }
+        }
+    }
+}
+
+pub fn display_item_long(
+    item: &PathBuf,
+    strip: Option<&Path>,
+    max_links: usize,
+    max_size: usize,
+    options: &Options
+) {
+    let m = match get_metadata(item, options) {
+        Err(e) => {
+            let filename = get_file_name(&item, strip);
+            show_error!("{}: {}", filename, e);
+            return;
+        },
+        Ok(m) => m
+    };
+
+    // todo
+}
+
