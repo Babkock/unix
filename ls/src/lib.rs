@@ -54,8 +54,9 @@ pub struct Options {
     pub one_file_per_line: bool,  // -1
     pub human_readable: bool,     // -h | --human-readable
     pub classify: bool,           // -F | --classify
+    pub inode: bool,              // -i | --inode
 
-    pub color: bool,            // --color
+    pub color: bool,              // --color
 }
 
 #[cfg(unix)]
@@ -278,9 +279,9 @@ pub fn enter_directory(dir: &PathBuf, options: &Options) {
         let mut display_entries = entries.clone();
         display_entries.insert(0, dir.join(".."));
         display_entries.insert(0, dir.join("."));
-        display_items(&display_entries, Some(dir), &options);
+        display_items(&display_entries, Some(dir), options);
     } else {
-        display_items(&entries, Some(dir), &options);
+        display_items(&entries, Some(dir), options);
     }
 
     if options.recurse {
@@ -320,7 +321,7 @@ pub fn pad_left(string: String, count: usize) -> String {
     }
 }
 
-pub fn display_items(items: &Vec<PathBuf>, strip: Option<&Path>, options: Options) {
+pub fn display_items(items: &Vec<PathBuf>, strip: Option<&Path>, options: &Options) {
     if options.long_listing || options.numeric_ids {
         let (mut max_links, mut max_size) = (1, 1);
         for i in items {
@@ -462,7 +463,7 @@ pub fn display_date(metadata: &Metadata, options: &Options) -> String {
 
 #[cfg(not(unix))]
 #[allow(unused_variables)]
-pub fn display_date(metadata, &Metadata, options: &Options) -> String {
+pub fn display_date(metadata: &Metadata, options: &Options) -> String {
     if let Ok(mtime) = metadata.modified() {
         let time = time::at(Timespec::new(
             mtime
