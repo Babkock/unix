@@ -9,22 +9,13 @@ extern crate libc;
 #[macro_use]
 extern crate lazy_static;
 
-use number_prefix::{Standalone, Prefixed, decimal_prefix};
-use term_grid::{Cell, Direction, Filling, Grid, GridOptions};
-use time::{strftime, Timespec};
 #[cfg(unix)]
-use libc::{mode_t, S_ISGID, S_ISUID, S_IRUSR, S_IWUSR, S_ISVTX, S_IROTH, S_IRGRP, S_IWOTH, S_IWGRP, S_IXGRP, S_IXOTH, S_IXUSR};
 use libc::{time_t, c_char, c_int, gid_t, uid_t};
-use libc::{getgrgid, getgrnam, getgroups, getpwnam, getpwuid, group, passwd};
 
 use std::{io, fs, ptr, process};
-use std::time::UNIX_EPOCH;
-use std::io::ErrorKind;
 use std::fs::{DirEntry, FileType, Metadata};
 use std::path::{Path, PathBuf};
-use std::cmp::Reverse;
-use std::ffi::{CStr, CString};
-use std::borrow::Cow;
+use std::time::UNIX_EPOCH;
 #[cfg(unix)]
 use std::collections::HashMap;
 
@@ -37,138 +28,6 @@ use std::os::unix::fs::MetadataExt;
 use std::os::unix::fs::FileTypeExt;
 #[cfg(unix)]
 use unicode_width::UnicodeWidthStr;
-
-mod display;
-
-extern "C" {
-    fn getgrouplist(
-        name: *const c_char,
-        gid: gid_t,
-        groups: *mut gid_t,
-        ngroups: *mut c_int
-    ) -> c_int;
-}
-
-pub fn get_groups() -> io::Result<Vec<gid_t>> {
-    let ngroups = unsafe { getgroups(0, ptr::null_mut()) };
-    if ngroups == -1 {
-        return Err(io::Error::last_os_error());
-    }
-    let mut groups = Vec::with_capacity(ngroups as usize);
-    let ngroups = unsafe { getgroups(ngroups, groups.as_mut_ptr()) };
-    if ngroups == -1 {
-        Err(io::Error::last_os_error())
-    } else {
-        unsafe {
-            groups.set_len(ngroups as usize);
-        }
-        Ok(groups)
-    }
-}
-
-macro_rules! cstr2cow {
-    ($v:expr) => (
-        unsafe { CStr::from_ptr($v).to_string_lossy() }
-    )
-}
-
-macro_rules! safe_unwrap(
-    ($exp:expr) => (
-        match $exp {
-            Ok(m) => m,
-            Err(f) => {
-                println!("{}", f.to_string());
-                process::exit(2);
-            }
-        }
-    )
-);
-
-pub struct Passwd {
-    inner: passwd
-}
-
-impl Passwd {
-    pub fn name(&self) -> Cow<str> {
-        cstr2cow!(self.inner.pw_name)
-    }
-
-    pub fn uid(&self) -> uid_t {
-        self.inner.pw_uid
-    }
-
-    pub fn gid(&self) -> gid_t {
-        self.inner.pw_gid
-    }
-
-    pub fn user_info(&self) -> Cow<str> {
-        cstr2cow!(self.inner.pw_gecos)
-    }
-
-    pub fn user_shell(&self) -> Cow<str> {
-        cstr2cow!(self.inner.pw_shell)
-    }
-
-    pub fn user_dir(&self) -> Cow<str> {
-        cstr2cow!(self.inner.pw_dir)
-    }
-
-    pub fn user_passwd(&self) -> Cow<str> {
-        cstr2cow!(self.inner.pw_passwd)
-    }
-
-    pub fn as_inner(&self) -> &passwd {
-        &self.inner
-    }
-
-    pub fn into_inner(self) -> passwd {
-        self.inner
-    }
-
-    pub fn belongs_to(&self) -> Vec<gid_t> {
-        let mut ngroups: c_int = 8;
-        let mut groups = Vec::with_capacity(ngroups as usize);
-        let gid = self.inner.pw_gid;
-        let name = self.inner.pw_name;
-        unsafe {
-            if getgrouplist(name, gid, groups.as_mut_ptr(), &mut ngroups) == -1 {
-                groups.resize(ngroups as usize, 0);
-                getgrouplist(name, gid, groups.as_mut_ptr(), &mut ngroups);
-            }
-            groups.set_len(ngroups as usize);
-        }
-        groups.truncate(ngroups as usize);
-        groups
-    }
-}
-
-pub struct Group {
-    inner: group
-}
-
-impl Group {
-    pub fn name(&self) -> Cow<str> {
-        cstr2cow!(self.inner.gr_name)
-    }
-
-    pub fn gid(&self) -> gid_t {
-        self.inner.gr_gid
-    }
-
-    pub fn as_inner(&self) -> &group {
-        &self.inner
-    }
-
-    pub fn into_inner(self) -> group {
-        self.inner
-    }
-}
-
-pub trait Locate<K> {
-    fn locate(key: K) -> io::Result<Self>
-    where
-        Self: ::std::marker::Sized;
-}
 
 #[derive(Clone)]
 pub struct Options {
@@ -197,6 +56,10 @@ pub struct Options {
     pub color: bool,              // --color
 }
 
+mod display;
+mod file;
+mod group;
+
 #[cfg(unix)]
 static DEFAULT_COLORS: &str = "rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31";
 
@@ -220,50 +83,6 @@ lazy_static! {
     static ref END_CODE: &'static str = COLOR_MAP.get("ec").unwrap_or(&"");
 }
 
-macro_rules! f {
-    ($fnam:ident, $fid:ident, $t:ident, $st:ident) => (
-        impl Locate<$t> for $st {
-            fn locate(k: $t) -> io::Result<Self> {
-                unsafe {
-                    let data = $fid(k);
-                    if !data.is_null() {
-                        Ok($st {
-                            inner: ptr::read(data as *const _)
-                        })
-                    } else {
-                        Err(io::Error::new(ErrorKind::NotFound, format!("No such id: {}", k)))
-                    }
-                }
-            }
-        }
-
-        impl<'a> Locate<&'a str> for $st {
-            fn locate(k: &'a str) -> io::Result<Self> {
-                if let Ok(id) = k.parse::<$t>() {
-                    let data = unsafe { $fid(id) };
-                    if !data.is_null() {
-                        Ok($st {
-                            inner: unsafe { ptr::read(data as *const _)}
-                        })
-                    } else {
-                        Err(io::Error::new(ErrorKind::NotFound, format!("No such id: {}", id)))
-                    }
-                } else {
-                    unsafe {
-                        let data = $fnam(CString::new(k).unwrap().as_ptr());
-                        if !data.is_null() {
-                            Ok($st {
-                                inner: ptr::read(data as *const _)
-                            })
-                        } else {
-                            Err(io::Error::new(ErrorKind::NotFound, format!("Not found: {}", k)))
-                        }
-                    }
-                }
-            }
-        }
-    )
-}
 
 // pub fn display_permissions
 
@@ -297,14 +116,14 @@ pub fn list(options: Options) {
         }
     }
     sort_entries(&mut sfiles, &options);
-    display_items(&sfiles, None, &options);
+    display::display_items(&sfiles, None, &options);
 
     sort_entries(&mut sdirs, &options);
     for d in sdirs {
         if options.dirs.len() > 1 {
             println!("\n{}:", d.to_string_lossy());
         }
-        enter_directory(&d, options.clone());
+        file::enter_directory(&d, &options);
     }
 }
 
@@ -315,20 +134,20 @@ pub fn sort_entries(entries: &mut Vec<PathBuf>, options: &Options) {
         if options.sort_by_ctime {
             entries.sort_by_key(|k| {
                 Reverse(
-                    get_metadata(k, options.clone()).map(|md| md.ctime()).unwrap_or(0)
+                    file::get_metadata(k, options).map(|md| md.ctime()).unwrap_or(0)
                 )
             });
         } else {
             entries.sort_by_key(|k| {
                 Reverse(
-                    get_metadata(k, options.clone()).and_then(|md| md.modified())
+                    file::get_metadata(k, options).and_then(|md| md.modified())
                         .unwrap_or(UNIX_EPOCH)
                 )
             })
         }
     } else if options.sort_by_size {
         entries.sort_by_key(|k| {
-            get_metadata(k, options.clone()).map(|md| md.size()).unwrap_or(0)
+            file::get_metadata(k, options).map(|md| md.size()).unwrap_or(0)
         });
         rev = !rev;
     } else if options.no_sort {
@@ -346,13 +165,13 @@ pub fn sort_entries(entries: &mut Vec<PathBuf>, options: &Options) {
     if options.sort_by_mtime {
         entries.sort_by_key(|k| {
             Reverse(
-                get_metadata(k, options).and_then(|md| md.modified())
+                file::get_metadata(k, options).and_then(|md| md.modified())
                     .unwrap_or(UNIX_EPOCH)
             )
         });
     } else if options.sort_by_ctime {
         entries.sort_by_key(|k| {
-            get_metadata(k, options).map(|md| md.file_size()).unwrap_or(0)
+            file::get_metadata(k, options).map(|md| md.file_size()).unwrap_or(0)
         });
         rev = !rev;
     } else if !options.no_sort {
@@ -368,65 +187,6 @@ pub fn max(l: usize, r: usize) -> usize {
     if l > r { l } else { r }
 }
 
-pub fn should_display(entry: &DirEntry, options: Options) -> bool {
-    let ffi_name = entry.file_name();
-    let name = ffi_name.to_string_lossy();
-    if !options.show_hidden && !options.ignore_implied {
-        if name.starts_with('.') {
-            return false;
-        }
-    }
-    if options.ignore_backups && name.ends_with('~') {
-        return false;
-    }
-    return true;
-}
-
-pub fn enter_directory(dir: &PathBuf, options: Options) {
-    let mut entries =
-        safe_unwrap!(fs::read_dir(dir).and_then(|e| e.collect::<Result<Vec<_>, _>>()));
-
-    entries.retain(|e| should_display(e, &options));
-
-    let mut entries: Vec<_> = entries.iter().map(DirEntry::path).collect();
-    sort_entries(&mut entries, &options);
-
-    if options.show_hidden {
-        let mut display_entries = entries.clone();
-        display_entries.insert(0, dir.join(".."));
-        display_entries.insert(0, dir.join("."));
-        display_items(&display_entries, Some(dir), &options);
-    } else {
-        display_items(&entries, Some(dir), &options);
-    }
-
-    if options.recurse {
-        for e in entries.iter().filter(|p| p.is_dir()) {
-            println!("\n{}:", e.to_string_lossy());
-            enter_directory(&e, options.clone());
-        }
-    }
-}
-
-pub fn get_metadata(entry: &PathBuf, options: &Options) -> io::Result<Metadata> {
-    if options.dereference {
-        entry.metadata().or(entry.symlink_metadata())
-    } else {
-        entry.symlink_metadata()
-    }
-}
-
-pub fn display_dir_entry_size(entry: &PathBuf, options: &Options) -> (usize, usize) {
-    if let Ok(md) = get_metadata(entry, options) {
-        (
-            display_symlink_count(&md).len(),
-            display_file_size(&md, options.clone()).len()
-        )
-    } else {
-        (0, 0)
-    }
-}
-
 pub fn pad_left(string: String, count: usize) -> String {
     if count > string.len() {
         let pad = count - string.len();
@@ -436,249 +196,7 @@ pub fn pad_left(string: String, count: usize) -> String {
         string
     }
 }
-
-pub fn display_items(items: &Vec<PathBuf>, strip: Option<&Path>, options: &Options) {
-    if options.long_listing || options.numeric_ids {
-        let (mut max_links, mut max_size) = (1, 1);
-        for i in items {
-            let (links, size) = display_dir_entry_size(i, options.clone());
-            max_links = max(links, max_links);
-            max_size = max(size, max_size);
-        }
-        for i in items {
-            display_item_long(i, strip, max_links, max_size, options.clone());
-        }
-    } else {
-        if !options.one_file_per_line {
-            let names = items.iter().filter_map(|i| {
-                let m = get_metadata(i, options);
-                match m {
-                    Err(e) => {
-                        let filename = get_file_name(i, strip);
-                        println!("{}: {}", filename, e);
-                        None
-                    }
-                    Ok(m) => {
-                        Some(display_file_name(&i, strip, &m, options))
-                    }
-                }
-            });
-
-            if let Some(size) = termsize::get() {
-                let mut grid = Grid::new(GridOptions {
-                    filling: Filling::Spaces(2),
-                    direction: Direction::TopToBottom
-                });
-
-                for n in names {
-                    grid.add(n);
-                }
-
-                if let Some(output) = grid.fit_into_width(size.cols as usize) {
-                    print!("{}", output);
-                    return;
-                }
-            }
-        }
-
-        /* couldn't display a grid */
-        for i in items {
-            let m = get_metadata(i, options);
-            if let Ok(m) = m {
-                println!("{}", display_file_name(&i, strip, &m, options).contents);
-            }
-        }
-    }
-}
-
-pub fn display_item_long(
-    item: &PathBuf,
-    strip: Option<&Path>,
-    max_links: usize,
-    max_size: usize,
-    options: Options
-) {
-    let m = match get_metadata(item, options.clone()) {
-        Err(e) => {
-            let filename = get_file_name(&item, strip);
-            println!("{}: {}", filename, e);
-            return;
-        },
-        Ok(m) => m
-    };
-
-    println!(
-        "{}{}{} {} {} {} {} {} {}",
-        get_inode(&m, options.clone()),
-        display_file_type(m.file_type()),
-        display::display_permissions(&m),
-        pad_left(display_symlink_count(&m), max_links),
-        display_uname(&m, options.clone()),
-        display_group(&m, options.clone()),
-        pad_left(display_file_size(&m, options.clone()), max_size),
-        display_date(&m, options.clone()),
-        display_file_name(&item, strip, &m, options.clone()).contents
-    );
-}
-
-#[cfg(unix)]
-pub fn get_inode(metadata: &Metadata, options: Options) -> String {
-    if options.inode {
-        format!("{:8} ", metadata.ino())
-    } else {
-        "".to_string()
-    }
-}
-
-#[cfg(not(unix))]
-pub fn get_inode(_metadata: &Metadata, _options: Options) -> String {
-    "".to_string()
-}
-
-f!(getpwnam, getpwuid, uid_t, Passwd);
-f!(getgrnam, getgrgid, gid_t, Group);
-
-#[inline]
-pub fn uid2usr(id: uid_t) -> io::Result<String> {
-    Passwd::locate(id).map(|p| p.name().into_owned())
-}
-
-#[inline]
-pub fn gid2grp(id: gid_t) -> io::Result<String> {
-    Group::locate(id).map(|p| p.name().into_owned())
-}
-
-#[inline]
-pub fn usr2uid(name: &str) -> io::Result<uid_t> {
-    Passwd::locate(name).map(|p| p.uid())
-}
-
-#[inline]
-pub fn grp2gid(name: &str) -> io::Result<gid_t> {
-    Group::locate(name).map(|p| p.gid())
-}
-
-#[cfg(unix)]
-pub fn display_uname(metadata: &Metadata, options: Options) -> String {
-    if options.numeric_ids {
-        metadata.uid().to_string()
-    } else {
-        uid2usr(metadata.uid()).unwrap_or(metadata.uid().to_string())
-    }
-}
-
-#[cfg(unix)]
-pub fn display_group(metadata: &Metadata, options: Options) -> String {
-    if options.numeric_ids {
-        metadata.gid().to_string()
-    } else {
-        gid2grp(metadata.gid()).unwrap_or(metadata.gid().to_string())
-    }
-}
-
-#[cfg(not(unix))]
-#[allow(unused_variables)]
-pub fn display_uname(metadata: &Metadata, _options: Options) -> String {
-    "somebody".to_string()
-}
-
-#[cfg(not(unix))]
-pub fn display_group(metadata: &Metadata, _options: Options) -> String {
-    "somegroup".to_string()
-}
-
-#[cfg(unix)]
-pub fn display_date(metadata: &Metadata, options: Options) -> String {
-    let secs = if options.sort_by_ctime {
-        metadata.ctime()
-    } else {
-        metadata.mtime()
-    };
-    let time = time::at(Timespec::new(secs, 0));
-    strftime("%F %R", &time).unwrap()
-}
-
-#[cfg(not(unix))]
-#[allow(unused_variables)]
-pub fn display_date(metadata: &Metadata, options: Options) -> String {
-    if let Ok(mtime) = metadata.modified() {
-        let time = time::at(Timespec::new(
-            mtime
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as i64,
-            0,
-        ));
-        strftime("%F %R", &time).unwrap()
-    } else {
-        "???".to_string()
-    }
-}
-
-pub fn display_file_size(metadata: &Metadata, options: Options) -> String {
-    if options.human_readable {
-        match decimal_prefix(metadata.len() as f64) {
-            Standalone(bytes) => bytes.to_string(),
-            Prefixed(prefix, bytes) => format!("{:.2}{}", bytes, prefix).to_uppercase()
-        }
-    } else {
-        metadata.len().to_string()
-    }
-}
-
-pub fn display_file_type(file_type: FileType) -> String {
-    if file_type.is_dir() {
-        "d".to_string()
-    } else if file_type.is_symlink() {
-        "l".to_string()
-    } else {
-        "-".to_string()
-    }
-}
-
-pub fn get_file_name(name: &Path, strip: Option<&Path>) -> String {
-    let mut name = match strip {
-        Some(prefix) => name.strip_prefix(prefix).unwrap_or(name),
-        None => name,
-    };
-    if name.as_os_str().len() == 0 {
-        name = Path::new(".");
-    }
-    name.to_string_lossy().into_owned()
-}
-
-#[cfg(not(unix))]
-pub fn display_file_name(
-    path: &Path,
-    strip: Option<&Path>,
-    metadata: &Metadata,
-    options: Options
-) -> Cell {
-    let mut name = get_file_name(path, strip);
-
-    if !options.long_listing {
-        name = get_inode(metadata, options.clone()) + &name;
-    }
-
-    if options.classify {
-        let file_type = metadata.file_type();
-        if file_type.is_dir() {
-            name.push('/');
-        } else if file_type.is_symlink() {
-            name.push('@');
-        }
-    }
-
-    if options.long_listing && metadata.file_type().is_symlink() {
-        if let Ok(target) = path.read_link() {
-            let target_name = target.to_string_lossy().to_string();
-            name.push_str(" -> ");
-            name.push_str(&target_name);
-        }
-    }
-
-    name.into()
-}
+// trimmed here
 
 #[cfg(unix)]
 pub fn color_name(name: String, typ: &str) -> String {
@@ -712,110 +230,5 @@ macro_rules! has {
     ($mode:expr, $perm:expr) => (
         $mode & ($perm as mode_t) != 0
     )
-}
-
-#[cfg(unix)]
-pub fn display_file_name(
-    path: &Path,
-    strip: Option<&Path>,
-    metadata: &Metadata,
-    options: Options
-) -> Cell {
-    let mut name = get_file_name(path, strip);
-    if !options.long_listing {
-        name = get_inode(metadata, options.clone()) + &name;
-    }
-    let mut width = UnicodeWidthStr::width(&*name);
-
-    let color = options.color;
-    let classify = options.classify;
-    let ext;
-
-    if color || classify {
-        let file_type = metadata.file_type();
-
-        let (code, sym) = if file_type.is_dir() {
-            ("dir", Some('/'))
-        } else if file_type.is_symlink() {
-            if path.exists() {
-                ("ln", Some('@'))
-            } else {
-                ("or", Some('@'))
-            }
-        } else if file_type.is_socket() {
-            ("so", Some('='))
-        } else if file_type.is_fifo() {
-            ("pi", Some('|'))
-        } else if file_type.is_block_device() {
-            ("bd", None)
-        } else if file_type.is_char_device() {
-            ("cd", None)
-        } else if file_type.is_file() {
-            let mode = metadata.mode() as mode_t;
-            let sym = if has!(mode, S_IXUSR | S_IXGRP | S_IXOTH) {
-                Some('*')
-            } else {
-                None
-            };
-            if has!(mode, S_ISUID) {
-                ("su", sym)
-            } else if has!(mode, S_ISGID) {
-                ("sg", sym)
-            } else if has!(mode, S_ISVTX) && has!(mode, S_IWOTH) {
-                ("tw", sym)
-            } else if has!(mode, S_ISVTX) {
-                ("st", sym)
-            } else if has!(mode, S_IWOTH) {
-                ("ow", sym)
-            } else if has!(mode, S_IXUSR | S_IXGRP | S_IXOTH) {
-                ("ex", sym)
-            } else if metadata.nlink() > 1 {
-                ("mh", sym)
-            } else if let Some(e) = path.extension() {
-                ext = format!("*.{}", e.to_string_lossy());
-                (ext.as_str(), None)
-            } else {
-                ("fi", None)
-            }
-        } else {
-            ("", None)
-        };
-
-        if color {
-            name = color_name(name, code);
-        }
-        if classify {
-            if let Some(s) = sym {
-                name.push(s);
-                width += 1;
-            }
-        }
-    }
-
-    if options.long_listing && metadata.file_type().is_symlink() {
-        if let Ok(target) = path.read_link() {
-            // Don't bother updating width here because it's not used
-            let code = if target.exists() { "fi" } else { "mi" };
-            let target_name = color_name(target.to_string_lossy().to_string(), code);
-            name.push_str(" -> ");
-            name.push_str(&target_name);
-        }
-    }
-
-    Cell {
-        contents: name,
-        width: width
-    }
-}
-
-#[cfg(not(unix))]
-#[allow(unused_variables)]
-pub fn display_symlink_count(metadata: &Metadata) -> String {
-    String::from("1")
-}
-
-#[cfg(unix)]
-pub fn display_symlink_count(metadata: &Metadata) -> String {
-    metadata.nlink().to_string()
 }
 
