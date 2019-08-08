@@ -191,6 +191,11 @@ fn main() -> io::Result<()> {
         1 => true,
         _ => false
     };
+    let inode: bool = match matches.occurrences_of("i") {
+        0 => false,
+        1 => true,
+        _ => false
+    };
     let color: bool = match matches.occurrences_of("color") {
         0 => false,
         1 => true,
@@ -204,7 +209,7 @@ fn main() -> io::Result<()> {
             dirs.push(".");
         },
         Some(n) => {
-            dirs = n.collect();
+            dirs.push(n);
         }
     };
 
@@ -228,6 +233,7 @@ fn main() -> io::Result<()> {
         one_file_per_line,
         human_readable,
         classify,
+        inode,
         color
     };
 

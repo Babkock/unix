@@ -13,15 +13,13 @@ use number_prefix::{Standalone, Prefixed, decimal_prefix};
 use term_grid::{Cell, Direction, Filling, Grid, GridOptions};
 use time::{strftime, Timespec};
 #[cfg(unix)]
-use libc::{mode_t, S_ISGID, S_ISUID, S_ISVTX, S_IWOTH, S_IXGRP, S_IXOTH, S_IXUSR};
+use libc::{mode_t, S_ISGID, S_ISUID, S_IRUSR, S_IWUSR, S_ISVTX, S_IROTH, S_IRGRP, S_IWOTH, S_IWGRP, S_IXGRP, S_IXOTH, S_IXUSR};
 use libc::{time_t, c_char, c_int, gid_t, uid_t};
 use libc::{getgrgid, getgrnam, getgroups, getpwnam, getpwuid, group, passwd};
 
-use std::{io, fs, ptr};
+use std::{io, fs, ptr, process};
 use std::time::UNIX_EPOCH;
 use std::io::ErrorKind;
-use std::io::Error as IOError;
-use std::io::Result as IoResult;
 use std::fs::{DirEntry, FileType, Metadata};
 use std::path::{Path, PathBuf};
 use std::cmp::Reverse;
@@ -49,12 +47,21 @@ extern "C" {
     ) -> c_int;
 }
 
-pub fn get_groups() -> IOResult<Vec<gid_t>> {
+pub fn get_groups() -> io::Result<Vec<gid_t>> {
     let ngroups = unsafe { getgroups(0, ptr::null_mut()) };
     if ngroups == -1 {
-        return Err(IOError::last_os_error());
+        return Err(io::Error::last_os_error());
     }
-    // todo...
+    let mut groups = Vec::with_capacity(ngroups as usize);
+    let ngroups = unsafe { getgroups(ngroups, groups.as_mut_ptr()) };
+    if ngroups == -1 {
+        Err(io::Error::last_os_error())
+    } else {
+        unsafe {
+            groups.set_len(ngroups as usize);
+        }
+        Ok(groups)
+    }
 }
 
 macro_rules! cstr2cow {
@@ -62,6 +69,18 @@ macro_rules! cstr2cow {
         unsafe { CStr::from_ptr($v).to_string_lossy() }
     )
 }
+
+macro_rules! safe_unwrap(
+    ($exp:expr) => (
+        match $exp {
+            Ok(m) => m,
+            Err(f) => {
+                println!("{}", f.to_string());
+                process::exit(2);
+            }
+        }
+    )
+);
 
 pub struct Passwd {
     inner: passwd
@@ -94,11 +113,6 @@ impl Passwd {
 
     pub fn user_passwd(&self) -> Cow<str> {
         cstr2cow!(self.inner.pw_passwd)
-    }
-
-    #[cfg(any(target_os = "freebsd", target_os = "macos"))]
-    pub fn user_access_class(&self) -> Cow<str> {
-        cstr2cow!(self.inner.pw_class)
     }
 
     pub fn as_inner(&self) -> &passwd {
@@ -149,13 +163,13 @@ impl Group {
 }
 
 pub trait Locate<K> {
-    fn locate(key: K) -> IOResult<Self>
+    fn locate(key: K) -> io::Result<Self>
     where
         Self: ::std::marker::Sized;
 }
 
 pub struct Options {
-    pub dirs: Vec<String>,   // "required" arg, comes with no option
+    pub dirs: Vec<&str>,   // "required" arg, comes with no option
     
     pub show_hidden: bool,        // -a | --all
     pub ignore_implied: bool,     // -A | --almost-all
@@ -205,9 +219,54 @@ lazy_static! {
 
 #[cfg(unix)]
 macro_rules! has {
-    ($mode:expr, $perm:expr) => {
+    ($mode:expr, $perm:expr) => (
         $mode & ($perm) != 0
-    }
+    )
+}
+
+macro_rules! f {
+    ($fnam:ident, $fid:ident, $t:ident, $st:ident) => (
+        impl Locate<$t> for $st {
+            fn locate(k: $t) -> io::Result<Self> {
+                unsafe {
+                    let data = $fid(k);
+                    if !data.is_null() {
+                        Ok($st {
+                            inner: ptr::read(data as *const _)
+                        })
+                    } else {
+                        Err(io::Error::new(ErrorKind::NotFound, format!("No such id: {}", k)))
+                    }
+                }
+            }
+        }
+
+        impl<'a> Locate<&'a str> for $st {
+            fn locate(k: &'a str) -> io::Result<Self> {
+                if let Ok(id) = k.parse::<$t>() {
+                    let data = unsafe { $fid(id) };
+                    if !data.is_null() {
+                        Ok($st {
+                            inner: unsafe { ptr::read(data as *const _)}
+                        })
+                    } else {
+                        Err(io::Error::new(ErrorKind::NotFound, format!("No such id: {}", id)))
+                    }
+                } else {
+                    unsafe {
+                        let data = $fnam(CString::new(k).unwrap().as_ptr());
+                        if !data.is_null() {
+                            Ok($st {
+                                inner: ptr::read(data as *const _)
+                            })
+                        } else {
+                            Err(io::Error::new(ErrorKind::NotFound, format!("Not found: {}", k)))
+                        }
+                    }
+                }
+            }
+        }
+    )
 }
 
 #[cfg(not(unix))]
@@ -222,48 +281,46 @@ pub fn display_permissions(metadata: &fs::Metadata) -> String {
     display_permissions_unix(mode as u32)
 }
 
-/* This function is taken from the uucore crate
- * (c) Joseph Crail and (c) Jian Zeng */
 #[cfg(unix)]
 pub fn display_permissions_unix(mode: u32) -> String {
     let mut result: String = String::with_capacity(9);
-    result.push(if has!(mode, libc::S_IRUSR) { 'r' } else { '-' });
-    result.push(if has!(mode, libc::S_IWUSR) { 'w' } else { '-' });
-    result.push(if has!(mode, libc::S_ISUID) {
-        if has!(mode, libc::S_IXUSR) {
+    result.push(if has!(mode, S_IRUSR) { 'r' } else { '-' });
+    result.push(if has!(mode, S_IWUSR) { 'w' } else { '-' });
+    result.push(if has!(mode, S_ISUID) {
+        if has!(mode, S_IXUSR) {
             's'
         } else {
             'S'
         }
-    } else if has!(mode, libc::S_IXUSR) {
+    } else if has!(mode, S_IXUSR) {
         'x'
     } else {
         '-'
     });
 
-    result.push(if has!(mode, libc::S_IRGRP) { 'r' } else { '-' });
-    result.push(if has!(mode, libc::S_IWGRP) { 'w' } else { '-' });
-    result.push(if has!(mode, libc::S_ISGID) {
-        if has!(mode, libc::S_IXGRP) {
+    result.push(if has!(mode, S_IRGRP) { 'r' } else { '-' });
+    result.push(if has!(mode, S_IWGRP) { 'w' } else { '-' });
+    result.push(if has!(mode, S_ISGID) {
+        if has!(mode, S_IXGRP) {
             's'
         } else {
             'S'
         }
-    } else if has!(mode, libc::S_IXGRP) {
+    } else if has!(mode, S_IXGRP) {
         'x'
     } else {
         '-'
     });
 
-    result.push(if has!(mode, libc::S_IROTH) { 'r' } else { '-' });
-    result.push(if has!(mode, libc::S_IWOTH) { 'w' } else { '-' });
-    result.push(if has!(mode, libc::S_ISVTX) {
-        if has!(mode, libc::S_IXOTH) {
+    result.push(if has!(mode, S_IROTH) { 'r' } else { '-' });
+    result.push(if has!(mode, S_IWOTH) { 'w' } else { '-' });
+    result.push(if has!(mode, S_ISVTX) {
+        if has!(mode, S_IXOTH) {
             't'
         } else {
             'T'
         }
-    } else if has!(mode, libc::S_IXOTH) {
+    } else if has!(mode, S_IXOTH) {
         'x'
     } else {
         '-'
@@ -460,7 +517,7 @@ pub fn display_items(items: &Vec<PathBuf>, strip: Option<&Path>, options: &Optio
                 match m {
                     Err(e) => {
                         let filename = get_file_name(i, strip);
-                        show_error!("{}: {}", filename, e);
+                        println!("{}: {}", filename, e);
                         None
                     }
                     Ok(m) => {
@@ -506,7 +563,7 @@ pub fn display_item_long(
     let m = match get_metadata(item, options) {
         Err(e) => {
             let filename = get_file_name(&item, strip);
-            show_error!("{}: {}", filename, e);
+            println!("{}: {}", filename, e);
             return;
         },
         Ok(m) => m
@@ -540,18 +597,27 @@ pub fn get_inode(_metadata: &Metadata, _options: &Options) -> String {
     "".to_string()
 }
 
-/* we're defining the f macro later */
 f!(getpwnam, getpwuid, uid_t, Passwd);
 f!(getgrnam, getgrgid, gid_t, Group);
 
 #[inline]
-pub fn uid2usr(id: uid_t) -> IOResult<String> {
-
+pub fn uid2usr(id: uid_t) -> io::Result<String> {
+    Passwd::locate(id).map(|p| p.name().into_owned())
 }
 
 #[inline]
-pub fn gid2grp(id: gid_t) -> IOResult<String> {
+pub fn gid2grp(id: gid_t) -> io::Result<String> {
+    Group::locate(id).map(|p| p.name().into_owned())
+}
 
+#[inline]
+pub fn usr2uid(name: &str) -> io::Result<uid_t> {
+    Passwd::locate(name).map(|p| p.uid())
+}
+
+#[inline]
+pub fn grp2gid(name: &str) -> io::Result<gid_t> {
+    Group::locate(name).map(|p| p.gid())
 }
 
 #[cfg(unix)]
