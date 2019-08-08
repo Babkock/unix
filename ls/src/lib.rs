@@ -168,8 +168,9 @@ pub trait Locate<K> {
         Self: ::std::marker::Sized;
 }
 
+#[derive(Clone)]
 pub struct Options {
-    pub dirs: Vec<&str>,   // "required" arg, comes with no option
+    pub dirs: Vec<String>,   // "required" arg, comes with no option
     
     pub show_hidden: bool,        // -a | --all
     pub ignore_implied: bool,     // -A | --almost-all
@@ -358,39 +359,39 @@ pub fn list(options: Options) {
             sfiles.push(p);
         }
     }
-    sort_entries(&mut sfiles, &options);
-    display_items(&sfiles, None, &options);
+    sort_entries(&mut sfiles, options.clone());
+    display_items(&sfiles, None, options.clone());
 
-    sort_entries(&mut sdirs, &options);
+    sort_entries(&mut sdirs, options.clone());
     for d in sdirs {
         if options.dirs.len() > 1 {
             println!("\n{}:", d.to_string_lossy());
         }
-        enter_directory(&d, &options);
+        enter_directory(&d, options.clone());
     }
 }
 
 #[cfg(unix)]
-pub fn sort_entries(entries: &mut Vec<PathBuf>, options: &Options) {
+pub fn sort_entries(entries: &mut Vec<PathBuf>, options: Options) {
     let mut rev = options.reverse;
     if options.sort_by_mtime {
         if options.sort_by_ctime {
             entries.sort_by_key(|k| {
                 Reverse(
-                    get_metadata(k, &options).map(|md| md.ctime()).unwrap_or(0)
+                    get_metadata(k, options.clone()).map(|md| md.ctime()).unwrap_or(0)
                 )
             });
         } else {
             entries.sort_by_key(|k| {
                 Reverse(
-                    get_metadata(k, &options).and_then(|md| md.modified())
+                    get_metadata(k, options.clone()).and_then(|md| md.modified())
                         .unwrap_or(UNIX_EPOCH)
                 )
             })
         }
     } else if options.sort_by_size {
         entries.sort_by_key(|k| {
-            get_metadata(k, &options).map(|md| md.size()).unwrap_or(0)
+            get_metadata(k, options.clone()).map(|md| md.size()).unwrap_or(0)
         });
         rev = !rev;
     } else if options.no_sort {
@@ -403,18 +404,18 @@ pub fn sort_entries(entries: &mut Vec<PathBuf>, options: &Options) {
 }
 
 #[cfg(windows)]
-pub fn sort_entries(entries: &mut Vec<PathBuf>, options: &Options) {
+pub fn sort_entries(entries: &mut Vec<PathBuf>, options: Options) {
     let mut rev = options.reverse;
     if options.sort_by_mtime {
         entries.sort_by_key(|k| {
             Reverse(
-                get_metadata(k, &options).and_then(|md| md.modified())
+                get_metadata(k, options.clone()).and_then(|md| md.modified())
                     .unwrap_or(UNIX_EPOCH)
             )
         });
     } else if options.sort_by_ctime {
         entries.sort_by_key(|k| {
-            get_metadata(k, &options).map(|md| md.file_size()).unwrap_or(0)
+            get_metadata(k, options.clone()).map(|md| md.file_size()).unwrap_or(0)
         });
         rev = !rev;
     } else if !options.no_sort {
@@ -430,7 +431,7 @@ pub fn max(l: usize, r: usize) -> usize {
     if l > r { l } else { r }
 }
 
-pub fn should_display(entry: &DirEntry, options: &Options) -> bool {
+pub fn should_display(entry: &DirEntry, options: Options) -> bool {
     let ffi_name = entry.file_name();
     let name = ffi_name.to_string_lossy();
     if !options.show_hidden && !options.ignore_implied {
@@ -444,33 +445,33 @@ pub fn should_display(entry: &DirEntry, options: &Options) -> bool {
     return true;
 }
 
-pub fn enter_directory(dir: &PathBuf, options: &Options) {
+pub fn enter_directory(dir: &PathBuf, options: Options) {
     let mut entries =
         safe_unwrap!(fs::read_dir(dir).and_then(|e| e.collect::<Result<Vec<_>, _>>()));
 
-    entries.retain(|e| should_display(e, &options));
+    entries.retain(|e| should_display(e, options.clone()));
 
     let mut entries: Vec<_> = entries.iter().map(DirEntry::path).collect();
-    sort_entries(&mut entries, &options);
+    sort_entries(&mut entries, options.clone());
 
     if options.show_hidden {
         let mut display_entries = entries.clone();
         display_entries.insert(0, dir.join(".."));
         display_entries.insert(0, dir.join("."));
-        display_items(&display_entries, Some(dir), options);
+        display_items(&display_entries, Some(dir), options.clone());
     } else {
-        display_items(&entries, Some(dir), options);
+        display_items(&entries, Some(dir), options.clone());
     }
 
     if options.recurse {
         for e in entries.iter().filter(|p| p.is_dir()) {
             println!("\n{}:", e.to_string_lossy());
-            enter_directory(&e, &options);
+            enter_directory(&e, options.clone());
         }
     }
 }
 
-pub fn get_metadata(entry: &PathBuf, options: &Options) -> io::Result<Metadata> {
+pub fn get_metadata(entry: &PathBuf, options: Options) -> io::Result<Metadata> {
     if options.dereference {
         entry.metadata().or(entry.symlink_metadata())
     } else {
@@ -478,11 +479,11 @@ pub fn get_metadata(entry: &PathBuf, options: &Options) -> io::Result<Metadata> 
     }
 }
 
-pub fn display_dir_entry_size(entry: &PathBuf, options: &Options) -> (usize, usize) {
-    if let Ok(md) = get_metadata(entry, options) {
+pub fn display_dir_entry_size(entry: &PathBuf, options: Options) -> (usize, usize) {
+    if let Ok(md) = get_metadata(entry, options.clone()) {
         (
             display_symlink_count(&md).len(),
-            display_file_size(&md, &options).len()
+            display_file_size(&md, options.clone()).len()
         )
     } else {
         (0, 0)
@@ -499,21 +500,21 @@ pub fn pad_left(string: String, count: usize) -> String {
     }
 }
 
-pub fn display_items(items: &Vec<PathBuf>, strip: Option<&Path>, options: &Options) {
+pub fn display_items(items: &Vec<PathBuf>, strip: Option<&Path>, options: Options) {
     if options.long_listing || options.numeric_ids {
         let (mut max_links, mut max_size) = (1, 1);
         for i in items {
-            let (links, size) = display_dir_entry_size(i, &options);
+            let (links, size) = display_dir_entry_size(i, options.clone());
             max_links = max(links, max_links);
             max_size = max(size, max_size);
         }
         for i in items {
-            display_item_long(i, strip, max_links, max_size, &options);
+            display_item_long(i, strip, max_links, max_size, options.clone());
         }
     } else {
         if !options.one_file_per_line {
             let names = items.iter().filter_map(|i| {
-                let m = get_metadata(i, &options);
+                let m = get_metadata(i, options.clone());
                 match m {
                     Err(e) => {
                         let filename = get_file_name(i, strip);
@@ -521,7 +522,7 @@ pub fn display_items(items: &Vec<PathBuf>, strip: Option<&Path>, options: &Optio
                         None
                     }
                     Ok(m) => {
-                        Some(display_file_name(&i, strip, &m, &options))
+                        Some(display_file_name(&i, strip, &m, options.clone()))
                     }
                 }
             });
@@ -545,9 +546,9 @@ pub fn display_items(items: &Vec<PathBuf>, strip: Option<&Path>, options: &Optio
 
         /* couldn't display a grid */
         for i in items {
-            let m = get_metadata(i, &options);
+            let m = get_metadata(i, options.clone());
             if let Ok(m) = m {
-                println!("{}", display_file_name(&i, strip, &m, &options).contents);
+                println!("{}", display_file_name(&i, strip, &m, options.clone()).contents);
             }
         }
     }
@@ -558,9 +559,9 @@ pub fn display_item_long(
     strip: Option<&Path>,
     max_links: usize,
     max_size: usize,
-    options: &Options
+    options: Options
 ) {
-    let m = match get_metadata(item, options) {
+    let m = match get_metadata(item, options.clone()) {
         Err(e) => {
             let filename = get_file_name(&item, strip);
             println!("{}: {}", filename, e);
@@ -571,20 +572,20 @@ pub fn display_item_long(
 
     println!(
         "{}{}{} {} {} {} {} {} {}",
-        get_inode(&m, &options),
+        get_inode(&m, options.clone()),
         display_file_type(m.file_type()),
         display_permissions(&m),
         pad_left(display_symlink_count(&m), max_links),
-        display_uname(&m, &options),
-        display_group(&m, &options),
-        pad_left(display_file_size(&m, &options), max_size),
-        display_date(&m, &options),
-        display_file_name(&item, strip, &m, &options).contents
+        display_uname(&m, options.clone()),
+        display_group(&m, options.clone()),
+        pad_left(display_file_size(&m, options.clone()), max_size),
+        display_date(&m, options.clone()),
+        display_file_name(&item, strip, &m, options.clone()).contents
     );
 }
 
 #[cfg(unix)]
-pub fn get_inode(metadata: &Metadata, options: &Options) -> String {
+pub fn get_inode(metadata: &Metadata, options: Options) -> String {
     if options.inode {
         format!("{:8} ", metadata.ino())
     } else {
@@ -593,7 +594,7 @@ pub fn get_inode(metadata: &Metadata, options: &Options) -> String {
 }
 
 #[cfg(not(unix))]
-pub fn get_inode(_metadata: &Metadata, _options: &Options) -> String {
+pub fn get_inode(_metadata: &Metadata, _options: Options) -> String {
     "".to_string()
 }
 
@@ -621,7 +622,7 @@ pub fn grp2gid(name: &str) -> io::Result<gid_t> {
 }
 
 #[cfg(unix)]
-pub fn display_uname(metadata: &Metadata, options: &Options) -> String {
+pub fn display_uname(metadata: &Metadata, options: Options) -> String {
     if options.numeric_ids {
         metadata.uid().to_string()
     } else {
@@ -630,7 +631,7 @@ pub fn display_uname(metadata: &Metadata, options: &Options) -> String {
 }
 
 #[cfg(unix)]
-pub fn display_group(metadata: &Metadata, options: &Options) -> String {
+pub fn display_group(metadata: &Metadata, options: Options) -> String {
     if options.numeric_ids {
         metadata.gid().to_string()
     } else {
@@ -640,17 +641,17 @@ pub fn display_group(metadata: &Metadata, options: &Options) -> String {
 
 #[cfg(not(unix))]
 #[allow(unused_variables)]
-pub fn display_uname(metadata: &Metadata, _options: &Options) -> String {
+pub fn display_uname(metadata: &Metadata, _options: Options) -> String {
     "somebody".to_string()
 }
 
 #[cfg(not(unix))]
-pub fn display_group(metadata: &Metadata, _options: &Options) -> String {
+pub fn display_group(metadata: &Metadata, _options: Options) -> String {
     "somegroup".to_string()
 }
 
 #[cfg(unix)]
-pub fn display_date(metadata: &Metadata, options: &Options) -> String {
+pub fn display_date(metadata: &Metadata, options: Options) -> String {
     let secs = if options.sort_by_ctime {
         metadata.ctime()
     } else {
@@ -662,7 +663,7 @@ pub fn display_date(metadata: &Metadata, options: &Options) -> String {
 
 #[cfg(not(unix))]
 #[allow(unused_variables)]
-pub fn display_date(metadata: &Metadata, options: &Options) -> String {
+pub fn display_date(metadata: &Metadata, options: Options) -> String {
     if let Ok(mtime) = metadata.modified() {
         let time = time::at(Timespec::new(
             mtime
@@ -677,7 +678,7 @@ pub fn display_date(metadata: &Metadata, options: &Options) -> String {
     }
 }
 
-pub fn display_file_size(metadata: &Metadata, options: &Options) -> String {
+pub fn display_file_size(metadata: &Metadata, options: Options) -> String {
     if options.human_readable {
         match decimal_prefix(metadata.len() as f64) {
             Standalone(bytes) => bytes.to_string(),
@@ -714,12 +715,12 @@ pub fn display_file_name(
     path: &Path,
     strip: Option<&Path>,
     metadata: &Metadata,
-    options: &Options
+    options: Options
 ) -> Cell {
     let mut name = get_file_name(path, strip);
 
     if !options.long_listing {
-        name = get_inode(metadata, &options) + &name;
+        name = get_inode(metadata, options.clone()) + &name;
     }
 
     if options.classify {
@@ -781,11 +782,11 @@ pub fn display_file_name(
     path: &Path,
     strip: Option<&Path>,
     metadata: &Metadata,
-    options: &Options
+    options: Options
 ) -> Cell {
     let mut name = get_file_name(path, strip);
     if !options.long_listing {
-        name = get_inode(metadata, &options) + &name;
+        name = get_inode(metadata, options.clone()) + &name;
     }
     let mut width = UnicodeWidthStr::width(&*name);
 

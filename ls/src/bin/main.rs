@@ -35,7 +35,7 @@ fn main() -> io::Result<()> {
              .takes_value(false))
         .arg(Arg::with_name("ctime")
              .short("c")
-             .long("")
+             .long("ctime")
              .help(
                  "If the long listing format (e.g. -l, -o) is being used, print the status \
                  change time (the 'ctime' in the inode) instead of the modification time. When explicitly \
@@ -90,17 +90,17 @@ fn main() -> io::Result<()> {
              .takes_value(false))
         .arg(Arg::with_name("sort-by-file-size")
              .short("S")
-             .long("")
+             .long("filesize")
              .help("Sort by file size, largest first")
              .takes_value(false))
         .arg(Arg::with_name("sort-by-mtime")
              .short("t")
-             .long("")
+             .long("mtime")
              .help("Sort by modification time, newest first")
              .takes_value(false))
         .arg(Arg::with_name("do-not-sort")
              .short("U")
-             .long("")
+             .long("none")
              .help("Do not sort; list files in the directory order")
              .takes_value(false))
         .arg(Arg::with_name("color")
@@ -111,130 +111,39 @@ fn main() -> io::Result<()> {
              .takes_value(true))
         .get_matches();
 
-    let show_hidden: bool = match matches.occurrences_of("a") {
-        0 => false,
-        1 => true,
-        _ => false
-    };
-    let ignore_implied: bool = match matches.occurrences_of("A") {
-        0 => false,
-        1 => true,
-        _ => false
-    };
-    let dirs_themselves: bool = match matches.occurrences_of("d") {
-        0 => false,
-        1 => true,
-        _ => false
-    };
-    let long_listing: bool = match matches.occurrences_of("l") {
-        0 => false,
-        1 => true,
-        _ => false
-    };
-    let dereference: bool = match matches.occurrences_of("L") {
-        0 => false,
-        1 => true,
-        _ => false
-    };
-    let reverse: bool = match matches.occurrences_of("r") {
-        0 => false,
-        1 => true,
-        _ => false
-    };
-    let recurse: bool = match matches.occurrences_of("R") {
-        0 => false,
-        1 => true,
-        _ => false
-    };
-    let sort_by_mtime: bool = match matches.occurrences_of("t") {
-        0 => false,
-        1 => true,
-        _ => false
-    };
-    let sort_by_ctime: bool = match matches.occurrences_of("c") {
-        0 => false,
-        1 => true,
-        _ => false
-    };
-    let sort_by_size: bool = match matches.occurrences_of("S") {
-        0 => false,
-        1 => true,
-        _ => false
-    };
-    let no_sort: bool = match matches.occurrences_of("U") {
-        0 => false,
-        1 => true,
-        _ => false
-    };
-    let ignore_backups: bool = match matches.occurrences_of("B") {
-        0 => false,
-        1 => true,
-        _ => false
-    };
-    let numeric_ids: bool = match matches.occurrences_of("n") {
-        0 => false,
-        1 => true,
-        _ => false
-    };
-    let one_file_per_line: bool = match matches.occurrences_of("1") {
-        0 => false,
-        1 => true,
-        _ => false
-    };
-    let human_readable: bool = match matches.occurrences_of("h") {
-        0 => false,
-        1 => true,
-        _ => false
-    };
-    let classify: bool = match matches.occurrences_of("F") {
-        0 => false,
-        1 => true,
-        _ => false
-    };
-    let inode: bool = match matches.occurrences_of("i") {
-        0 => false,
-        1 => true,
-        _ => false
-    };
-    let color: bool = match matches.occurrences_of("color") {
-        0 => false,
-        1 => true,
-        _ => false
-    };
-
-    let mut dirs: Vec<&str> = Vec::new();
+    let mut dirs: Vec<String> = Vec::new();
 
     match matches.value_of("DIRECTORY") {
         None => {
-            dirs.push(".");
+            dirs.push(".".to_string());
         },
         Some(n) => {
-            dirs.push(n);
+            dirs.push(n.to_string());
         }
     };
 
     let options: Options = Options {
         dirs,
-        show_hidden,
-        ignore_implied,
-        dirs_themselves,
-        long_listing,
-        dereference,
-        reverse,
-        recurse,
+        show_hidden: matches.occurrences_of("all") != 0,
+        ignore_implied: matches.occurrences_of("almost-all") != 0,
+        dirs_themselves: matches.occurrences_of("directory") != 0,
+        long_listing: matches.occurrences_of("long") != 0,
+        dereference: matches.occurrences_of("dereference") != 0,
+        reverse: matches.occurrences_of("reverse") != 0,
+        recurse: matches.occurrences_of("recursive") != 0,
 
-        sort_by_mtime,
-        sort_by_ctime,
-        sort_by_size,
-        no_sort,
-        ignore_backups,
+        sort_by_mtime: matches.occurrences_of("sort-by-mtime") != 0,
+        sort_by_ctime: matches.occurrences_of("ctime") != 0,
+        sort_by_size: matches.occurrences_of("sort-by-file-size") != 0,
+        no_sort: matches.occurrences_of("do-not-sort") != 0,
+        ignore_backups: matches.occurrences_of("ignore-backups") != 0,
 
-        numeric_ids,
-        one_file_per_line,
-        human_readable,
-        classify,
-        inode,
-        color
+        numeric_ids: matches.occurrences_of("numeric-uid-gid") != 0,
+        one_file_per_line: matches.occurrences_of("one-file-per-line") != 0,
+        human_readable: matches.occurrences_of("human-readable") != 0,
+        classify: matches.occurrences_of("classify") != 0,
+        inode: matches.occurrences_of("inode") != 0,
+        color: matches.occurrences_of("color") != 0
     };
 
     list(options);
