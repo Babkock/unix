@@ -38,6 +38,8 @@ use std::os::unix::fs::FileTypeExt;
 #[cfg(unix)]
 use unicode_width::UnicodeWidthStr;
 
+mod display;
+
 extern "C" {
     fn getgrouplist(
         name: *const c_char,
@@ -218,13 +220,6 @@ lazy_static! {
     static ref END_CODE: &'static str = COLOR_MAP.get("ec").unwrap_or(&"");
 }
 
-#[cfg(unix)]
-macro_rules! has {
-    ($mode:expr, $perm:expr) => (
-        $mode & ($perm) != 0
-    )
-}
-
 macro_rules! f {
     ($fnam:ident, $fid:ident, $t:ident, $st:ident) => (
         impl Locate<$t> for $st {
@@ -270,65 +265,7 @@ macro_rules! f {
     )
 }
 
-#[cfg(not(unix))]
-#[allow(unused_variables)]
-pub fn display_permissions(metadata: &fs::Metadata) -> String {
-    String::from("---------")
-}
-
-#[cfg(unix)]
-pub fn display_permissions(metadata: &fs::Metadata) -> String {
-    let mode: mode_t = metadata.mode() as mode_t;
-    display_permissions_unix(mode as u32)
-}
-
-#[cfg(unix)]
-pub fn display_permissions_unix(mode: u32) -> String {
-    let mut result: String = String::with_capacity(9);
-    result.push(if has!(mode, S_IRUSR) { 'r' } else { '-' });
-    result.push(if has!(mode, S_IWUSR) { 'w' } else { '-' });
-    result.push(if has!(mode, S_ISUID) {
-        if has!(mode, S_IXUSR) {
-            's'
-        } else {
-            'S'
-        }
-    } else if has!(mode, S_IXUSR) {
-        'x'
-    } else {
-        '-'
-    });
-
-    result.push(if has!(mode, S_IRGRP) { 'r' } else { '-' });
-    result.push(if has!(mode, S_IWGRP) { 'w' } else { '-' });
-    result.push(if has!(mode, S_ISGID) {
-        if has!(mode, S_IXGRP) {
-            's'
-        } else {
-            'S'
-        }
-    } else if has!(mode, S_IXGRP) {
-        'x'
-    } else {
-        '-'
-    });
-
-    result.push(if has!(mode, S_IROTH) { 'r' } else { '-' });
-    result.push(if has!(mode, S_IWOTH) { 'w' } else { '-' });
-    result.push(if has!(mode, S_ISVTX) {
-        if has!(mode, S_IXOTH) {
-            't'
-        } else {
-            'T'
-        }
-    } else if has!(mode, S_IXOTH) {
-        'x'
-    } else {
-        '-'
-    });
-
-    result
-}
+// pub fn display_permissions
 
 pub fn list(options: Options) {
     let locs: Vec<String> = if options.dirs[0] == "." {
@@ -359,10 +296,10 @@ pub fn list(options: Options) {
             sfiles.push(p);
         }
     }
-    sort_entries(&mut sfiles, options.clone());
-    display_items(&sfiles, None, options.clone());
+    sort_entries(&mut sfiles, &options);
+    display_items(&sfiles, None, &options);
 
-    sort_entries(&mut sdirs, options.clone());
+    sort_entries(&mut sdirs, &options);
     for d in sdirs {
         if options.dirs.len() > 1 {
             println!("\n{}:", d.to_string_lossy());
@@ -372,7 +309,7 @@ pub fn list(options: Options) {
 }
 
 #[cfg(unix)]
-pub fn sort_entries(entries: &mut Vec<PathBuf>, options: Options) {
+pub fn sort_entries(entries: &mut Vec<PathBuf>, options: &Options) {
     let mut rev = options.reverse;
     if options.sort_by_mtime {
         if options.sort_by_ctime {
@@ -404,18 +341,18 @@ pub fn sort_entries(entries: &mut Vec<PathBuf>, options: Options) {
 }
 
 #[cfg(windows)]
-pub fn sort_entries(entries: &mut Vec<PathBuf>, options: Options) {
+pub fn sort_entries(entries: &mut Vec<PathBuf>, options: &Options) {
     let mut rev = options.reverse;
     if options.sort_by_mtime {
         entries.sort_by_key(|k| {
             Reverse(
-                get_metadata(k, options.clone()).and_then(|md| md.modified())
+                get_metadata(k, options).and_then(|md| md.modified())
                     .unwrap_or(UNIX_EPOCH)
             )
         });
     } else if options.sort_by_ctime {
         entries.sort_by_key(|k| {
-            get_metadata(k, options.clone()).map(|md| md.file_size()).unwrap_or(0)
+            get_metadata(k, options).map(|md| md.file_size()).unwrap_or(0)
         });
         rev = !rev;
     } else if !options.no_sort {
@@ -449,18 +386,18 @@ pub fn enter_directory(dir: &PathBuf, options: Options) {
     let mut entries =
         safe_unwrap!(fs::read_dir(dir).and_then(|e| e.collect::<Result<Vec<_>, _>>()));
 
-    entries.retain(|e| should_display(e, options.clone()));
+    entries.retain(|e| should_display(e, &options));
 
     let mut entries: Vec<_> = entries.iter().map(DirEntry::path).collect();
-    sort_entries(&mut entries, options.clone());
+    sort_entries(&mut entries, &options);
 
     if options.show_hidden {
         let mut display_entries = entries.clone();
         display_entries.insert(0, dir.join(".."));
         display_entries.insert(0, dir.join("."));
-        display_items(&display_entries, Some(dir), options.clone());
+        display_items(&display_entries, Some(dir), &options);
     } else {
-        display_items(&entries, Some(dir), options.clone());
+        display_items(&entries, Some(dir), &options);
     }
 
     if options.recurse {
@@ -471,7 +408,7 @@ pub fn enter_directory(dir: &PathBuf, options: Options) {
     }
 }
 
-pub fn get_metadata(entry: &PathBuf, options: Options) -> io::Result<Metadata> {
+pub fn get_metadata(entry: &PathBuf, options: &Options) -> io::Result<Metadata> {
     if options.dereference {
         entry.metadata().or(entry.symlink_metadata())
     } else {
@@ -479,8 +416,8 @@ pub fn get_metadata(entry: &PathBuf, options: Options) -> io::Result<Metadata> {
     }
 }
 
-pub fn display_dir_entry_size(entry: &PathBuf, options: Options) -> (usize, usize) {
-    if let Ok(md) = get_metadata(entry, options.clone()) {
+pub fn display_dir_entry_size(entry: &PathBuf, options: &Options) -> (usize, usize) {
+    if let Ok(md) = get_metadata(entry, options) {
         (
             display_symlink_count(&md).len(),
             display_file_size(&md, options.clone()).len()
@@ -500,7 +437,7 @@ pub fn pad_left(string: String, count: usize) -> String {
     }
 }
 
-pub fn display_items(items: &Vec<PathBuf>, strip: Option<&Path>, options: Options) {
+pub fn display_items(items: &Vec<PathBuf>, strip: Option<&Path>, options: &Options) {
     if options.long_listing || options.numeric_ids {
         let (mut max_links, mut max_size) = (1, 1);
         for i in items {
@@ -514,7 +451,7 @@ pub fn display_items(items: &Vec<PathBuf>, strip: Option<&Path>, options: Option
     } else {
         if !options.one_file_per_line {
             let names = items.iter().filter_map(|i| {
-                let m = get_metadata(i, options.clone());
+                let m = get_metadata(i, options);
                 match m {
                     Err(e) => {
                         let filename = get_file_name(i, strip);
@@ -522,7 +459,7 @@ pub fn display_items(items: &Vec<PathBuf>, strip: Option<&Path>, options: Option
                         None
                     }
                     Ok(m) => {
-                        Some(display_file_name(&i, strip, &m, options.clone()))
+                        Some(display_file_name(&i, strip, &m, options))
                     }
                 }
             });
@@ -546,9 +483,9 @@ pub fn display_items(items: &Vec<PathBuf>, strip: Option<&Path>, options: Option
 
         /* couldn't display a grid */
         for i in items {
-            let m = get_metadata(i, options.clone());
+            let m = get_metadata(i, options);
             if let Ok(m) = m {
-                println!("{}", display_file_name(&i, strip, &m, options.clone()).contents);
+                println!("{}", display_file_name(&i, strip, &m, options).contents);
             }
         }
     }
@@ -574,7 +511,7 @@ pub fn display_item_long(
         "{}{}{} {} {} {} {} {} {}",
         get_inode(&m, options.clone()),
         display_file_type(m.file_type()),
-        display_permissions(&m),
+        display::display_permissions(&m),
         pad_left(display_symlink_count(&m), max_links),
         display_uname(&m, options.clone()),
         display_group(&m, options.clone()),
