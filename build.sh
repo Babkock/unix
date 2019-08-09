@@ -26,6 +26,7 @@ if [ -z $1 ]; then
 			else
 				cp "target/release/$i" ../build
 			fi
+			strip --strip-all ../build/$i
 		else
 			popd > /dev/null
 			printf "\e[91;1mCrate '%s' failed to build\n" > /dev/stderr
