@@ -87,7 +87,7 @@ fn main() -> io::Result<()> {
         options.mode = Mode::Lines(10);
     }
 
-    let mut input = stdin.lock();
+    let input = stdin.lock();
     let mut i: i32 = 0;
     match options.mode {
         Mode::Bytes(n) => {

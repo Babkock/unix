@@ -136,7 +136,7 @@ fn main() -> io::Result<()> {
     
     let can_write_fast: bool = !(show_tabs || show_nonprint || show_ends || squeeze_blank || number_mode != NumMode::NumNull);
 
-    let success = if can_write_fast {
+    let _success = if can_write_fast {
         write_fast(files).is_ok()
     } else {
         let tab: String = if show_tabs { "^I".to_string() } else { "\t".to_string() };
