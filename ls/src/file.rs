@@ -10,6 +10,13 @@ use crate::display::*;
 use crate::Options;
 use crate::sort_entries;
 
+#[cfg(windows)]
+use std::os::windows::fs::MetadataExt;
+#[cfg(any(unix, target_os = "redox"))]
+use std::os::unix::fs::MetadataExt;
+#[cfg(unix)]
+use std::os::unix::fs::FileTypeExt;
+
 macro_rules! safe_unwrap(
     ($exp:expr) => (
         match $exp {
@@ -68,7 +75,7 @@ pub fn display_dir_entry_size(entry: &PathBuf, options: &Options) -> (usize, usi
 }
 
 #[cfg(unix)]
-pub fn get_inode(metadata: &Metadata, options: Options) -> String {
+pub fn get_inode(metadata: &Metadata, options: &Options) -> String {
     if options.inode {
         format!("{:8} ", metadata.ino())
     } else {
@@ -77,7 +84,7 @@ pub fn get_inode(metadata: &Metadata, options: Options) -> String {
 }
 
 #[cfg(not(unix))]
-pub fn get_inode(_metadata: &Metadata, _options: Options) -> String {
+pub fn get_inode(_metadata: &Metadata, _options: &Options) -> String {
     "".to_string()
 }
 

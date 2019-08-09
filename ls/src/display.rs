@@ -13,10 +13,23 @@ use std::time::UNIX_EPOCH;
 use number_prefix::{Standalone, Prefixed, decimal_prefix};
 use term_grid::{Cell, Direction, Filling, Grid, GridOptions};
 use time::{strftime, Timespec};
+use crate::max;
+use crate::Options;
+use crate::sort_entries;
+use crate::pad_left;
+use crate::color_name;
+use crate::file::*;
+use crate::group::*;
+
+#[cfg(windows)]
+use std::os::windows::fs::MetadataExt;
+
 #[cfg(any(unix, target_os ="redox"))]
 use std::os::unix::fs::MetadataExt;
 #[cfg(unix)]
 use std::os::unix::fs::FileTypeExt;
+#[cfg(unix)]
+use unicode_width::UnicodeWidthStr;
 
 #[cfg(unix)]
 use libc::{mode_t, S_ISGID, S_ISUID, S_IRUSR, S_IWUSR, S_ISVTX, S_IROTH, S_IRGRP, S_IWOTH, S_IWGRP, S_IXGRP, S_IXOTH, S_IXUSR};
@@ -103,10 +116,10 @@ pub fn display_items(items: &Vec<PathBuf>, strip: Option<&Path>, options: &Optio
     } else {
         if !options.one_file_per_line {
             let names = items.iter().filter_map(|i| {
-                let m = file::get_metadata(i, options);
+                let m = get_metadata(i, options);
                 match m {
                     Err(e) => {
-                        let filename = file::get_file_name(i, strip);
+                        let filename = get_file_name(i, strip);
                         println!("{}: {}", filename, e);
                         None
                     }
@@ -135,7 +148,7 @@ pub fn display_items(items: &Vec<PathBuf>, strip: Option<&Path>, options: &Optio
 
         /* couldn't display a grid */
         for i in items {
-            let m = file::get_metadata(i, options);
+            let m = get_metadata(i, options);
             if let Ok(m) = m {
                 println!("{}", display_file_name(&i, strip, &m, options).contents);
             }
@@ -150,9 +163,9 @@ pub fn display_item_long(
     max_size: usize,
     options: &Options
 ) {
-    let m = match file::get_metadata(item, options) {
+    let m = match get_metadata(item, options) {
         Err(e) => {
-            let filename = file::get_file_name(&item, strip);
+            let filename = get_file_name(&item, strip);
             println!("{}: {}", filename, e);
             return;
         },
@@ -161,7 +174,7 @@ pub fn display_item_long(
 
     println!(
         "{}{}{} {} {} {} {} {} {}",
-        file::get_inode(&m, options),
+        get_inode(&m, options),
         display_file_type(m.file_type()),
         display_permissions(&m),
         pad_left(display_symlink_count(&m), max_links),
@@ -180,9 +193,9 @@ pub fn display_file_name(
     metadata: &Metadata,
     options: &Options
 ) -> Cell {
-    let mut name = file::get_file_name(path, strip);
+    let mut name = get_file_name(path, strip);
     if !options.long_listing {
-        name = file::get_inode(metadata, options) + &name;
+        name = get_inode(metadata, options) + &name;
     }
     let mut width = UnicodeWidthStr::width(&*name);
 
@@ -343,7 +356,7 @@ pub fn display_uname(metadata: &Metadata, options: &Options) -> String {
     if options.numeric_ids {
         metadata.uid().to_string()
     } else {
-        group::uid2usr(metadata.uid()).unwrap_or(metadata.uid().to_string())
+        uid2usr(metadata.uid()).unwrap_or(metadata.uid().to_string())
     }
 }
 
@@ -352,7 +365,7 @@ pub fn display_group(metadata: &Metadata, options: &Options) -> String {
     if options.numeric_ids {
         metadata.gid().to_string()
     } else {
-        group::gid2grp(metadata.gid()).unwrap_or(metadata.gid().to_string())
+        gid2grp(metadata.gid()).unwrap_or(metadata.gid().to_string())
     }
 }
 
@@ -363,10 +376,10 @@ pub fn display_file_name(
     metadata: &Metadata,
     options: &Options
 ) -> Cell {
-    let mut name = file::get_file_name(path, strip);
+    let mut name = get_file_name(path, strip);
 
     if !options.long_listing {
-        name = file::get_inode(metadata, options) + &name;
+        name = get_inode(metadata, options) + &name;
     }
 
     if options.classify {

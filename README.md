@@ -11,4 +11,12 @@ To compile all of the programs, run the `build.sh` script. You can also compile 
 ./build.sh programname
 ```
 
-The compiled and stripped release binaries will be copied to the `build` directory.
+The compiled and stripped release binaries will be copied to the `build` directory. You can also build the documentation individually, or as a whole
+using this script. `./build.sh doc` will build docs for all of the programs.
+
+```
+./build.sh doc programname
+```
+
+This will compile the docs for the specified program, and open them in your web browser.
+

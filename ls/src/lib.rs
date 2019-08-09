@@ -16,20 +16,15 @@ use std::{io, fs, ptr, process};
 use std::fs::{DirEntry, FileType, Metadata};
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
+use std::cmp::Reverse;
 #[cfg(unix)]
 use std::collections::HashMap;
 
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
 #[cfg(windows)]
 use std::os::windows::fs::MetadataExt;
 
-#[cfg(any(unix, target_os = "redox"))]
-use std::os::unix::fs::MetadataExt;
-#[cfg(unix)]
-use std::os::unix::fs::FileTypeExt;
-#[cfg(unix)]
-use unicode_width::UnicodeWidthStr;
-
-#[derive(Clone)]
 pub struct Options {
     pub dirs: Vec<String>,   // "required" arg, comes with no option
     
@@ -223,12 +218,5 @@ pub fn color_name(name: String, typ: &str) -> String {
     } else {
         name
     }
-}
-
-#[cfg(unix)]
-macro_rules! has {
-    ($mode:expr, $perm:expr) => (
-        $mode & ($perm as mode_t) != 0
-    )
 }
 

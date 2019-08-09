@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 extern crate libc;
 
 use std::{io, ptr, process};
