@@ -1,3 +1,22 @@
+/*
+ * cat/lib.rs
+ * Babkock/unix
+ *
+ * Copyright (c) 2019 Tanner Babcock.
+ * MIT License.
+*/
+//! cat - Concatenate files or stdin, to stdout
+//!
+//! # Usage
+//!
+//! ```rust
+//! extern crate cat;
+//! ```
+//!
+//! ```
+//! $ cat file.txt > output.txt
+//! ```
+//!
 #![allow(unused_imports)]
 #[macro_use]
 extern crate quick_error;
@@ -15,6 +34,7 @@ use std::os::unix::fs::FileTypeExt;
 #[cfg(unix)]
 use unix_socket::UnixStream;
 
+/// Numbering Mode.
 #[derive(PartialEq)]
 pub enum NumMode {
     NumNull,
@@ -23,6 +43,7 @@ pub enum NumMode {
 }
 
 quick_error! {
+    /// Quick Errors for all types of problems
     #[derive(Debug)]
     pub enum Errors {
         Input(err: io::Error, path: String) {
@@ -180,6 +201,7 @@ pub fn write_fast(files: Vec<&str>) -> CatResult<()> {
     }
 }
 
+/// Struct for the output state.
 pub struct OutputState {
     line_number: usize,   // the current line number
     at_line_start: bool,  // whether the output cursor is at the beginning of a new line
@@ -188,7 +210,6 @@ pub struct OutputState {
 /// Writes files to stdout with 'options' as configuration. Returns Ok
 /// if no errors were encountered, or an error with the number of
 /// errors encountered.
-
 pub fn write_lines(files: Vec<&str>, options: &Options) -> CatResult<()> {
     let mut error_count = 0;
     let mut state = OutputState {

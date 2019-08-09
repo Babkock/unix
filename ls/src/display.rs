@@ -1,3 +1,10 @@
+/*
+ * ls/display.rs
+ * Babkock/unix
+ *
+ * Copyright (c) 2019 Tanner Babcock.
+ * MIT License.
+*/
 #![allow(unused_imports)]
 extern crate libc;
 extern crate term_grid;
@@ -48,12 +55,15 @@ pub fn display_permissions(metadata: &fs::Metadata) -> String {
     String::from("---------")
 }
 
+/// Wrapper for display_permissions_unix in unix, prints string of hyphens on Windows
 #[cfg(unix)]
 pub fn display_permissions(metadata: &fs::Metadata) -> String {
     let mode: mode_t = metadata.mode() as mode_t;
     display_permissions_unix(mode as u32)
 }
 
+/// Interpret file and group permissions given the 32-bit *mode*. Returns
+/// the formatted string.
 #[cfg(unix)]
 pub fn display_permissions_unix(mode: u32) -> String {
     let mut result: String = String::with_capacity(9);
@@ -102,6 +112,8 @@ pub fn display_permissions_unix(mode: u32) -> String {
     result
 }
 
+/// Display a collection of *items* (pointer to vector of paths), given the
+/// **Options** specified in *options*.
 pub fn display_items(items: &Vec<PathBuf>, strip: Option<&Path>, options: &Options) {
     if options.long_listing || options.numeric_ids {
         let (mut max_links, mut max_size) = (1, 1);
@@ -156,6 +168,8 @@ pub fn display_items(items: &Vec<PathBuf>, strip: Option<&Path>, options: &Optio
     }
 }
 
+/// Display *item* in a long listing. Takes the maximum number of symbolic links in *max_links*,
+/// the maximum file size in *max_size*, and the user-specified **Options** in *options*.
 pub fn display_item_long(
     item: &PathBuf,
     strip: Option<&Path>,
@@ -186,6 +200,8 @@ pub fn display_item_long(
     );
 }
 
+/// Displays the name of a single file at *path*. Interprets *metadata* and recognizes
+/// *options*.
 #[cfg(unix)]
 pub fn display_file_name(
     path: &Path,
@@ -302,6 +318,8 @@ pub fn display_group(metadata: &Metadata, _options: Options) -> String {
     "somegroup".to_string()
 }
 
+/// Return a formatted string for the file's date - either ctime() or mtime()
+/// from *metadata*, depending on *options*.
 #[cfg(unix)]
 pub fn display_date(metadata: &Metadata, options: &Options) -> String {
     let secs = if options.sort_by_ctime {
@@ -330,6 +348,8 @@ pub fn display_date(metadata: &Metadata, options: &Options) -> String {
     }
 }
 
+/// Display the file size in bytes, rounding up and printing the highest prefix 
+/// if human_readable is specified in *options*.
 pub fn display_file_size(metadata: &Metadata, options: &Options) -> String {
     if options.human_readable {
         match decimal_prefix(metadata.len() as f64) {
@@ -341,6 +361,7 @@ pub fn display_file_size(metadata: &Metadata, options: &Options) -> String {
     }
 }
 
+/// Is the file a directory, a symbolic link, or a regular file?
 pub fn display_file_type(file_type: FileType) -> String {
     if file_type.is_dir() {
         "d".to_string()
@@ -351,6 +372,8 @@ pub fn display_file_type(file_type: FileType) -> String {
     }
 }
 
+/// Returns the username that owns the file described in *metadata*. Returns a UID if numeric_ids
+/// had been specified.
 #[cfg(unix)]
 pub fn display_uname(metadata: &Metadata, options: &Options) -> String {
     if options.numeric_ids {
@@ -360,6 +383,7 @@ pub fn display_uname(metadata: &Metadata, options: &Options) -> String {
     }
 }
 
+/// Like display_uname, but for the file's group.
 #[cfg(unix)]
 pub fn display_group(metadata: &Metadata, options: &Options) -> String {
     if options.numeric_ids {
@@ -402,6 +426,7 @@ pub fn display_file_name(
     name.into()
 }
 
+/// Decides if a particular directory entry should be displayed or not.
 pub fn should_display(entry: &DirEntry, options: &Options) -> bool {
     let ffi_name = entry.file_name();
     let name = ffi_name.to_string_lossy();

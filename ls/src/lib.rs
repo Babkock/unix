@@ -1,3 +1,33 @@
+/* 
+ * ls/lib.rs
+ * Babkock/unix
+ * 
+ * Copyright (c) 2019 Tanner Babcock.
+ * MIT License.
+*/
+//!
+//! # ls
+//!
+//! List all files in the specified directory. Uses the current directory (".")
+//! if no path is specified.
+//!
+//! ```rust
+//! extern crate ls;
+//! ```
+//!
+//! This command-line example uses four options: long listing, human-readable, all, and classify.
+//!
+//! ```
+//! $ ls -lhaF
+//! drwxr-xr-x 3 user user  4.10K 2019-08-09 01:01 ./
+//! drwxr-xr-x 4 user user  4.10K 2019-08-06 16:58 ../
+//! -rw-r--r-- 1 user user 11.50K 2019-08-08 22:54 display.rs
+//! -rw-r--r-- 1 user user  2.67K 2019-08-08 22:57 file.rs
+//! -rw-r--r-- 1 user user  5.10K 2019-08-08 22:59 group.rs
+//! -rw-r--r-- 1 user user  6.49K 2019-08-08 22:55 lib.rs
+//! drwxr-xr-x 2 user user  4.10K 2019-08-08 04:04 bin/
+//! ```
+//!
 #![allow(unused_imports)]
 extern crate term_grid;
 extern crate termsize;
@@ -25,6 +55,8 @@ use std::os::unix::fs::MetadataExt;
 #[cfg(windows)]
 use std::os::windows::fs::MetadataExt;
 
+/// Big struct of all options for ls, including the specified
+/// directories themselves.
 pub struct Options {
     pub dirs: Vec<String>,   // "required" arg, comes with no option
     
@@ -79,8 +111,8 @@ lazy_static! {
 }
 
 
-// pub fn display_permissions
-
+/// The initial list function. Takes ownership of an **Options** struct, and allows
+/// its called functions to borrow it. Prints all entries in all specified dirs to standard out.
 pub fn list(options: Options) {
     let locs: Vec<String> = if options.dirs[0] == "." {
         vec![String::from(".")]
@@ -122,6 +154,9 @@ pub fn list(options: Options) {
     }
 }
 
+/// Sorts the directory *entries* (a vector of paths) given the **Options** specified in *options*.
+/// Can sort by modified time, change time, file size, or can default to no sorting. Reverses if
+/// specified.
 #[cfg(unix)]
 pub fn sort_entries(entries: &mut Vec<PathBuf>, options: &Options) {
     let mut rev = options.reverse;
@@ -178,6 +213,7 @@ pub fn sort_entries(entries: &mut Vec<PathBuf>, options: &Options) {
     }
 }
 
+/// Compares *l* to *r*, two usizes.
 pub fn max(l: usize, r: usize) -> usize {
     if l > r { l } else { r }
 }
@@ -191,8 +227,8 @@ pub fn pad_left(string: String, count: usize) -> String {
         string
     }
 }
-// trimmed here
 
+/// Parse colors.
 #[cfg(unix)]
 pub fn color_name(name: String, typ: &str) -> String {
     let mut typ = typ;

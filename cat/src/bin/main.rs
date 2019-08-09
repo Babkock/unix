@@ -1,3 +1,10 @@
+/*
+ * cat/main.rs
+ * Babkock/unix
+ *
+ * Copyright (c) 2019 Tanner Babcock.
+ * MIT License.
+*/
 extern crate cat;
 extern crate clap;
 

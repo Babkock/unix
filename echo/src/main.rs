@@ -1,10 +1,26 @@
+/*
+ * echo/main.rs
+ * Babkock/unix
+ *
+ * Copyright (c) 2019 Tanner Babcock.
+ * MIT License.
+*/
+//!
+//! echo - prints strings to stdout
+//!
+//! ```
+//! $ echo hello world
+//! hello world
+//! ```
+//!
 #![allow(unused_assignments)]
 use std::{env, process};
 use std::io::{self, Write};
 use std::iter::Peekable;
 use std::str::Chars;
 
-fn parse(input: &mut Peekable<Chars>, base: u32, max: u32, bpd: u32) -> Option<char> {
+/// Parse the true value of a hexadecimal, octal, or otherwise non-decimal digit
+pub fn parse(input: &mut Peekable<Chars>, base: u32, max: u32, bpd: u32) -> Option<char> {
     let mut r = 0x8000 * 0x1000;
     for _ in 0..max {
         match input.peek().and_then(|c| c.to_digit(base)) {
@@ -18,7 +34,8 @@ fn parse(input: &mut Peekable<Chars>, base: u32, max: u32, bpd: u32) -> Option<c
     std::char::from_u32(r)
 }
 
-fn escaped(input: &str) -> io::Result<bool> {
+/// Parse string with escape sequences, and print it
+pub fn escaped(input: &str) -> io::Result<bool> {
     let stdout = io::stdout();
     let mut output = stdout.lock();
     let mut quit: bool = false;
