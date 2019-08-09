@@ -6,7 +6,7 @@
  * MIT License.
 */
 //!
-//! # ls
+//! # **`ls`**`
 //!
 //! List all files in the specified directory. Uses the current directory (".")
 //! if no path is specified.
@@ -28,7 +28,6 @@
 //! drwxr-xr-x 2 user user  4.10K 2019-08-08 04:04 bin/
 //! ```
 //!
-#![allow(unused_imports)]
 extern crate term_grid;
 extern crate termsize;
 extern crate time;
@@ -39,17 +38,11 @@ extern crate libc;
 #[macro_use]
 extern crate lazy_static;
 
-#[cfg(unix)]
-use libc::{time_t, c_char, c_int, gid_t, uid_t};
-
-use std::{io, fs, ptr, process};
-use std::fs::{DirEntry, FileType, Metadata};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::UNIX_EPOCH;
 use std::cmp::Reverse;
 #[cfg(unix)]
 use std::collections::HashMap;
-
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
 #[cfg(windows)]

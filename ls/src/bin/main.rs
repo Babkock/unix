@@ -1,9 +1,16 @@
+/*
+ * ls/main.rs
+ * Babkock/unix
+ *
+ * Copyright (c) 2019 Tanner Babcock.
+ * MIT License.
+*/
 #![allow(unused_imports)]
 extern crate ls;
 extern crate clap;
 
 use clap::{Arg, App};
-use ls::*;
+use ls::{Options, list};
 use std::io;
 
 fn main() -> io::Result<()> {

@@ -5,7 +5,9 @@
  * Copyright (c) 2019 Tanner Babcock.
  * MIT License.
 */
-//! cat - Concatenate files or stdin, to stdout
+//! # **`cat`**
+//!
+//! Concatenate files or stdin, to stdout
 //!
 //! # Usage
 //!

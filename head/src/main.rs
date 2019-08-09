@@ -1,3 +1,10 @@
+/*
+ * head/main.rs
+ * Babkock/unix
+ *
+ * Copyright (c) 2019 Tanner Babcock.
+ * MIT License.
+*/
 #![allow(unused_imports)]
 use std::{env, io, process};
 use std::io::prelude::*;

@@ -1,11 +1,15 @@
+/*
+ * ls/file.rs
+ * Babkock/unix
+ *
+ * Copyright (c) 2019 Tanner Babcock.
+ * MIT License.
+*/
 extern crate libc;
 
-use std::{io, fs, ptr, process};
-use std::time::UNIX_EPOCH;
-use std::fs::{DirEntry, FileType, Metadata};
+use std::{io, fs, process};
+use std::fs::{DirEntry, Metadata};
 use std::path::{Path, PathBuf};
-use std::cmp::Reverse;
-use std::ffi::{CStr, CString};
 use crate::display::*;
 use crate::Options;
 use crate::sort_entries;
@@ -14,8 +18,6 @@ use crate::sort_entries;
 use std::os::windows::fs::MetadataExt;
 #[cfg(any(unix, target_os = "redox"))]
 use std::os::unix::fs::MetadataExt;
-#[cfg(unix)]
-use std::os::unix::fs::FileTypeExt;
 
 macro_rules! safe_unwrap(
     ($exp:expr) => (
