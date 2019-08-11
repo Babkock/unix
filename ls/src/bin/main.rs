@@ -115,6 +115,12 @@ fn main() -> io::Result<()> {
              .long("color")
              .help("Color output based on file type")
              .required(false)
+             .takes_value(false))
+        .arg(Arg::with_name("sort")
+             .short("s")
+             .long("sort")
+             .help("Which method to sort the files by (time, ctime, size, none)")
+             .value_name("sorting-method")
              .takes_value(true))
         .get_matches();
 
@@ -129,6 +135,39 @@ fn main() -> io::Result<()> {
         }
     };
 
+    let mut sort_by_mtime: bool = false;
+    let mut sort_by_ctime: bool = false;
+    let mut sort_by_size: bool = false;
+    let mut no_sort: bool = false;
+
+    match matches.value_of("sort") {
+        None => {
+            if matches.occurrences_of("do-not-sort") != 0 {
+                no_sort = true;
+            }
+            if matches.occurrences_of("sort-by-file-size") != 0 {
+                sort_by_size = true;
+            }
+            if matches.occurrences_of("sort-by-mtime") != 0 {
+                sort_by_mtime = true;
+            }
+            if matches.occurrences_of("sort-by-ctime") != 0 {
+                sort_by_ctime = true;
+            }
+        },
+        Some(n) => {
+            if n == "none" {
+                no_sort = true;
+            } else if n == "size" {
+                sort_by_size = true;
+            } else if n == "time" {
+                sort_by_mtime = true;
+            } else if n == "ctime" {
+                sort_by_ctime = true;
+            }
+        },
+    };
+
     let options: Options = Options {
         dirs,
         show_hidden: matches.occurrences_of("all") != 0,
@@ -139,10 +178,10 @@ fn main() -> io::Result<()> {
         reverse: matches.occurrences_of("reverse") != 0,
         recurse: matches.occurrences_of("recursive") != 0,
 
-        sort_by_mtime: matches.occurrences_of("sort-by-mtime") != 0,
-        sort_by_ctime: matches.occurrences_of("ctime") != 0,
-        sort_by_size: matches.occurrences_of("sort-by-file-size") != 0,
-        no_sort: matches.occurrences_of("do-not-sort") != 0,
+        sort_by_mtime,
+        sort_by_ctime,
+        sort_by_size,
+        no_sort,
         ignore_backups: matches.occurrences_of("ignore-backups") != 0,
 
         numeric_ids: matches.occurrences_of("numeric-uid-gid") != 0,
