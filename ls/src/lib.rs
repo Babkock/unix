@@ -95,6 +95,7 @@ lazy_static! {
                 map.insert(p[0], p[1]);
             }
         }
+        map.insert("dir", "01;94");
         map
     };
     static ref RESET_CODE: &'static str = COLOR_MAP.get("rs").unwrap_or(&"0");
