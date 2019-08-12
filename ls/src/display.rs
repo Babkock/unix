@@ -20,11 +20,7 @@ use std::time::UNIX_EPOCH;
 use number_prefix::{Standalone, Prefixed, decimal_prefix};
 use term_grid::{Cell, Direction, Filling, Grid, GridOptions};
 use time::{strftime, Timespec};
-use crate::max;
-use crate::Options;
-use crate::sort_entries;
-use crate::pad_left;
-use crate::color_name;
+use crate::{max, Options, sort_entries, pad_left, color_name};
 use crate::file::*;
 use crate::group::*;
 
