@@ -13,3 +13,5 @@ time = "0.1.40"
 lazy_static = "1.0.1"
 unicode-width = "0.1.5"
 libc = "0.2"
+assert_cli = "0.6.3"
+

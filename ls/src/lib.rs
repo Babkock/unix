@@ -50,6 +50,8 @@ use std::os::windows::fs::MetadataExt;
 
 /// Big struct of all options for ls, including the specified
 /// directories themselves.
+#[derive(PartialEq)]
+#[derive(Debug)]
 pub struct Options {
     pub dirs: Vec<String>,   // "required" arg, comes with no option
     
@@ -95,7 +97,7 @@ lazy_static! {
                 map.insert(p[0], p[1]);
             }
         }
-        // make directories always blue. if this bothers you just delete the next line
+        // make directories always blue
         map.insert("dir", "01;94");
         map
     };
@@ -250,4 +252,7 @@ pub fn color_name(name: String, typ: &str) -> String {
         name
     }
 }
+
+#[cfg(test)]
+mod tests;
 
