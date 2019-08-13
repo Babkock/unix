@@ -38,6 +38,7 @@ use unix_socket::UnixStream;
 
 /// Numbering Mode.
 #[derive(PartialEq)]
+#[derive(Debug)]
 pub enum NumMode {
     NumNull,
     NumNonEmpty,
@@ -74,6 +75,8 @@ quick_error! {
 }
 
 /// Options for output.
+#[derive(PartialEq)]
+#[derive(Debug)]
 pub struct Options {
     pub number: NumMode,     // Line numbering mode
     pub squeeze_blank: bool, // Compress repeated empty lines
@@ -88,6 +91,8 @@ pub struct Handle {
 }
 
 /// Recognized file types.
+#[derive(PartialEq)]
+#[derive(Debug)]
 pub enum Type {
     Directory,
     File,
@@ -367,4 +372,7 @@ pub fn write_nonprint_to_end<W: Write>(in_buf: &[u8], writer: &mut W, tab: &[u8]
         0
     }
 }
+
+#[cfg(test)]
+mod tests;
 
