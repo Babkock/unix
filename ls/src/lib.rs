@@ -50,8 +50,7 @@ use std::os::windows::fs::MetadataExt;
 
 /// Big struct of all options for ls, including the specified
 /// directories themselves.
-#[derive(PartialEq)]
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 pub struct Options {
     pub dirs: Vec<String>,   // "required" arg, comes with no option
     
