@@ -7,15 +7,19 @@
 */
 extern crate libc;
 extern crate walkdir;
+
 use walkdir::WalkDir;
 use libc::{gid_t, lchown, uid_t};
-use std::fs::{self, Metadata};
+use std::{env, fs, io};
+use std::io::ErrorKind;
+use std::fs::Metadata;
 use std::os::unix::fs::MetadataExt;
-use std::io;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 use std::convert::AsRef;
 use std::ffi::CString;
+use std::borrow::Cow;
 use std::os::unix::ffi::OsStrExt;
+use crate::group::*;
 
 mod group;
 
@@ -23,7 +27,7 @@ const FTS_COMFOLLOW: u8 = 1;
 const FTS_PHYSICAL: u8 = 1 << 1;
 const FTS_LOGICAL: u8 = 1 << 2;
 
-#[derive(PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum Verbosity {
     Silent,
     Changes,
@@ -31,6 +35,7 @@ pub enum Verbosity {
     Normal
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum IfFrom {
     All,
     User(u32),
@@ -38,6 +43,15 @@ pub enum IfFrom {
     UserGroup(u32, u32),
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CanonicalizeMode {
+    None,
+    Normal,
+    Existing,
+    Missing
+}
+
+#[derive(Clone, PartialEq, Debug)]
 pub struct Owner {
     dest_uid: Option<u32>,
     dest_gid: Option<u32>,
@@ -50,6 +64,23 @@ pub struct Owner {
     dereference: bool
 }
 
+#[derive(Clone, PartialEq, Debug)]
+pub struct Options {
+    pub files: Vec<String>,
+
+    pub from: String,
+    pub reference: String,
+
+    pub verbosity: Verbosity,
+    pub dereference: bool,        // --dereference or -h | --no-dereference
+    
+    pub no_preserve_root: bool,   // --no-preserve-root
+    pub recurse: bool,            // -R | --recursive
+    pub traverse_it: bool,        // -H
+    pub traverse_all: bool,       // -L
+    pub traverse_none: bool,      // -P
+}
+
 macro_rules! unwrap {
     ($m:expr, $e:ident, $err:block) => (
         match $m {
@@ -59,7 +90,7 @@ macro_rules! unwrap {
     )
 }
 
-fn parse_spec(spec: &str) -> Result<(Option<u32>, Option<u32>), String> {
+pub fn parse_spec(spec: &str) -> Result<(Option<u32>, Option<u32>), String> {
     let args = spec.split(':').collect::<Vec<_>>();
     let usr_only: bool = args.len() == 1;
     let grp_only: bool = args.len() == 2 && args[0].is_empty() && !args[1].is_empty();
@@ -287,20 +318,127 @@ impl Owner {
     }
 }
 
-#[derive(PartialEq, Debug)]
-pub struct Options {
-    pub files: Vec<String>,
+pub fn resolve_relative_path(path: &Path) -> Cow<Path> {
+    if path.components().all(|e| e != Component::ParentDir) {
+        return path.into();
+    }
+    let root = Component::RootDir.as_os_str();
+    let mut result = env::current_dir().unwrap_or(PathBuf::from(root));
+    for c in path.components() {
+        match c {
+            Component::ParentDir => {
+                if let Ok(p) = result.read_link() {
+                    result = p;
+                }
+                result.pop();
+            },
+            Component::CurDir => (),
+            Component::RootDir | Component::Normal(_) | Component::Prefix(_) => {
+                result.push(c.as_os_str())
+            }
+        }
+    }
+    result.into()
+}
 
-    pub from: String,
-    pub reference: String,
+pub fn resolve<P: AsRef<Path>>(original: P) -> io::Result<PathBuf> {
+    const MAX_LINKS: u32 = 255;
+    let mut followed = 0;
+    let mut result = original.as_ref().to_path_buf();
+    loop {
+        if followed == MAX_LINKS {
+            return Err(io::Error::new(
+                ErrorKind::InvalidInput,
+                "maximum links followed"
+            ));
+        }
 
-    pub verbosity: Verbosity,
-    pub dereference: bool,        // --dereference or -h | --no-dereference
-    
-    pub no_preserve_root: bool,   // --no-preserve-root
-    pub recurse: bool,            // -R | --recursive
-    pub traverse_it: bool,        // -H
-    pub traverse_all: bool,       // -L
-    pub traverse_none: bool,      // -P
+        match fs::symlink_metadata(&result) {
+            Err(e) => return Err(e),
+            Ok(ref m) if !m.file_type().is_symlink() => break,
+            Ok(..) => {
+                followed += 1;
+                match fs::read_link(&result) {
+                    Ok(path) => {
+                        result.pop();
+                        result.push(path);
+                    }
+                    Err(e) => {
+                        return Err(e);
+                    }
+                }
+            }
+        }
+    }
+    Ok(result)
+}
+
+pub fn canonicalize<P: AsRef<Path>>(
+    original: P,
+    can_mode: CanonicalizeMode
+) -> io::Result<PathBuf> {
+    let original = original.as_ref();
+    let original = if original.is_absolute() {
+        original.to_path_buf()
+    } else {
+        env::current_dir().unwrap().join(original)
+    };
+
+    let mut result: PathBuf = PathBuf::new();
+    let mut parts = vec![];
+
+    /* split path by directory separator; add root directory to final path
+     * buffer; add remaining parts to temporary vector for canonicalization */
+    for part in original.components() {
+        match part {
+            Component::Prefix(_) | Component::RootDir => {
+                result.push(part.as_os_str());
+            }
+            Component::CurDir => (),
+            Component::ParentDir => {
+                parts.pop();
+            }
+            Component::Normal(_) => {
+                parts.push(part.as_os_str());
+            }
+        }
+    }
+
+    /* resolve symlinks where possible */
+    if !parts.is_empty() {
+        for part in parts[..parts.len() - 1].iter() {
+            result.push(part);
+
+            if can_mode == CanonicalizeMode::None {
+                continue;
+            }
+
+            match resolve(&result) {
+                Err(e) => match can_mode {
+                    CanonicalizeMode::Missing => continue,
+                    _ => return Err(e)
+                },
+                Ok(path) => {
+                    result.pop();
+                    result.push(path);
+                }
+            }
+        }
+
+        result.push(parts.last().unwrap());
+
+        match resolve(&result) {
+            Err(e) => {
+                if can_mode == CanonicalizeMode::Existing {
+                    return Err(e);
+                }
+            },
+            Ok(path) => {
+                result.pop();
+                result.push(path);
+            }
+        }
+    }
+    Ok(result)
 }
 

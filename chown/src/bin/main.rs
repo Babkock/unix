@@ -10,15 +10,22 @@ extern crate chown;
 extern crate clap;
 
 use clap::{Arg, App};
-use chown::Options;
+use chown::{Options, Verbosity};
 use std::io;
+use std::io::{Error, ErrorKind};
 
 fn main() -> io::Result<()> {
     let matches = App::new("chown").about("Change the file owner and group")
+        // this first argument, the "user:group" string, will get passed to parse_spec
+        .arg(Arg::with_name("spec")
+             .help("Specification string in format OWNER:GROUP")
+             .required(false)
+             .index(1)
+             .multiple(false))
         .arg(Arg::with_name("FILE")
              .help("File or directory to change ownership for")
-             .required(true)
-             .index(1)
+             .required(false)
+             .index(2)
              .multiple(true))
         .arg(Arg::with_name("changes")
              .short("c")
@@ -91,15 +98,23 @@ fn main() -> io::Result<()> {
 
     let mut files: Vec<String> = Vec::new();
 
-    match matches.value_of("FILE") {
+    if matches.occurrences_of("spec") != 0 && matches.occurrences_of("FILE") == 0 {
+        files.push(matches.value_of("spec").unwrap().to_string());
+
+        // worry about this later
+    }
+    else if matches.occurrences_of("spec") != 0 && matches.occurrences_of("FILE") != 0 {
+        files.push(matches.value_of("FILE").unwrap().to_string());
+    }
+    
+    /* match matches.value_of("FILE") {
         None => {
-            println!("No argument supplied");
             return 1;
         },
         Some(n) => {
             files.push(n.to_string());
         }
-    };
+    }; */
 
     let mut verbosity: Verbosity = if matches.occurrences_of("changes") != 0 {
         Verbosity::Changes
@@ -110,4 +125,6 @@ fn main() -> io::Result<()> {
     } else {
         Verbosity::Normal
     };
+
+    Ok(())
 }

@@ -1,5 +1,5 @@
 /*
- * ls/group.rs
+ * chown/group.rs
  * Babkock/unix
  *
  * Copyright (c) 2019 Tanner Babcock.
@@ -28,6 +28,14 @@ impl Passwd {
     pub fn name(&self) -> Cow<str> {
         cstr2cow!(self.inner.pw_name)
     }
+
+    pub fn uid(&self) -> uid_t {
+        self.inner.pw_uid
+    }
+
+    pub fn gid(&self) -> gid_t {
+        self.inner.pw_gid
+    }
 }
 
 pub struct Group {
@@ -37,6 +45,10 @@ pub struct Group {
 impl Group {
     pub fn name(&self) -> Cow<str> {
         cstr2cow!(self.inner.gr_name)
+    }
+
+    pub fn gid(&self) -> gid_t {
+        self.inner.gr_gid
     }
 }
 
