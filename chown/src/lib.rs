@@ -8,7 +8,7 @@
 extern crate libc;
 extern crate walkdir;
 use walkdir::WalkDir;
-use libc::{self, gid_t, lchown, uid_t};
+use libc::{gid_t, lchown, uid_t};
 use std::fs::{self, Metadata};
 use std::os::unix::fs::MetadataExt;
 use std::io;
@@ -17,7 +17,7 @@ use std::convert::AsRef;
 use std::ffi::CString;
 use std::os::unix::ffi::OsStrExt;
 
-// mod group;
+mod group;
 
 const FTS_COMFOLLOW: u8 = 1;
 const FTS_PHYSICAL: u8 = 1 << 1;
@@ -50,6 +50,53 @@ pub struct Owner {
     dereference: bool
 }
 
+macro_rules! unwrap {
+    ($m:expr, $e:ident, $err:block) => (
+        match $m {
+            Ok(meta) => meta,
+            Err($e) => $err
+        }
+    )
+}
+
+fn parse_spec(spec: &str) -> Result<(Option<u32>, Option<u32>), String> {
+    let args = spec.split(':').collect::<Vec<_>>();
+    let usr_only: bool = args.len() == 1;
+    let grp_only: bool = args.len() == 2 && args[0].is_empty() && !args[1].is_empty();
+    let usr_grp: bool = args.len() == 2 && !args[0].is_empty() && !args[1].is_empty();
+
+    if usr_only {
+        Ok((
+            Some(match Passwd::locate(args[0]) {
+                Ok(v) => v.uid(),
+                _ => return Err(format!("invalid user: '{}'", spec)),
+            }),
+            None,
+        ))
+    } else if grp_only {
+        Ok((
+            None,
+            Some(match Group::locate(args[1]) {
+                Ok(v) => v.gid(),
+                _ => return Err(format!("invalid group: '{}'", spec)),
+            }),
+        ))
+    } else if usr_grp {
+        Ok((
+            Some(match Passwd::locate(args[0]) {
+                Ok(v) => v.uid(),
+                _ => return Err(format!("invalid user: '{}'", spec)),
+            }),
+            Some(match Group::locate(args[1]) {
+                Ok(v) => v.gid(),
+                _ => return Err(format!("invalid group: '{}'", spec))
+            }),
+        ))
+    } else {
+        Ok((None, None))
+    }
+}
+
 impl Owner {
     fn exec(&self) -> i32 {
         let mut ret = 0;
@@ -67,7 +114,176 @@ impl Owner {
         follow: bool
     ) -> io::Result<()> {
         let path = path.as_ref();
-        // ...
+        let s: CString = CString::new(path.as_os_str().as_bytes()).unwrap();
+        let ret = unsafe {
+            if follow {
+                libc::chown(s.as_ptr(), duid, dgid)
+            } else {
+                lchown(s.as_ptr(), duid, dgid)
+            }
+        };
+        if ret == 0 {
+            Ok(())
+        } else {
+            Err(io::Error::last_os_error())
+        }
+    }
+
+    fn traverse<P: AsRef<Path>>(&self, root: P) -> i32 {
+        let follow_arg = self.dereference || self.bit_flag != FTS_PHYSICAL;
+        let path = root.as_ref();
+        let meta = match self.obtain_meta(path, follow_arg) {
+            Some(m) => m,
+            _ => return 1
+        };
+
+        // prohibit only if :
+        // --preserve-root and -R present
+        if self.recurse && self.preserve_root {
+            let may_exist = if follow_arg {
+                path.canonicalize().ok()
+            } else {
+                let real = resolve_relative_path(path);
+                if real.is_dir() {
+                    Some(real.canonicalize().expect("failed to get real path"))
+                } else {
+                    Some(real.into_owned())
+                }
+            };
+
+            if let Some(p) = may_exist {
+                if p.parent().is_none() {
+                    println!("it is dangerous to operate recursively on '/'");
+                    println!("use --no-preserve-root to override this failsafe");
+                    return 1;
+                }
+            }
+        }
+
+        let ret = if self.matched(meta.uid(), meta.gid()) {
+            self.wrap_chown(path, &meta, follow_arg)
+        } else {
+            0
+        };
+
+        if !self.recurse {
+            ret
+        } else {
+            ret | self.dive_into(&root)
+        }
+    }
+
+    fn dive_into<P: AsRef<Path>>(&self, root: P) -> i32 {
+        let mut ret = 0;
+        let root = root.as_ref();
+        let follow = self.dereference || self.bit_flag & FTS_LOGICAL != 0;
+        for entry in WalkDir::new(root).follow_links(follow).min_depth(1) {
+            let entry = unwrap!(entry, e, {
+                ret = 1;
+                println!("{}", e);
+                continue;
+            });
+            let path = entry.path();
+            let meta = match self.obtain_meta(path, follow) {
+                Some(m) => m,
+                _ => {
+                    ret = 1;
+                    continue;
+                }
+            };
+
+            if !self.matched(meta.uid(), meta.gid()) {
+                continue;
+            }
+
+            ret = self.wrap_chown(path, &meta, follow);
+        }
+        ret
+    }
+
+    fn obtain_meta<P: AsRef<Path>>(&self, path: P, follow: bool) -> Option<Metadata> {
+        use self::Verbosity::*;
+        let path = path.as_ref();
+        let meta = if follow {
+            unwrap!(path.metadata(), e, {
+                match self.verbosity {
+                    Silent => (),
+                    _ => println!("cannot access '{}': {}", path.display(), e),
+                }
+                return None;
+            })
+        } else {
+            unwrap!(path.symlink_metadata(), e, {
+                match self.verbosity {
+                    Silent => (),
+                    _ => println!("cannot dereference '{}': {}", path.display(), e),
+                }
+                return None;
+            })
+        };
+        Some(meta)
+    }
+
+    fn wrap_chown<P: AsRef<Path>>(&self, path: P, meta: &Metadata, follow: bool) -> i32 {
+        use self::Verbosity::*;
+        let mut ret = 0;
+        let dest_uid = self.dest_uid.unwrap_or(meta.uid());
+        let dest_gid = self.dest_gid.unwrap_or(meta.gid());
+        let path = path.as_ref();
+        if let Err(e) = self.chown(path, dest_uid, dest_gid, follow) {
+            match self.verbosity {
+                Silent => (),
+                _ => {
+                    println!("changing ownership of '{}': {}", path.display(), e);
+                    if self.verbosity == Verbose {
+                        println!(
+                            "failed to change ownership of {} from {}:{} to {}:{}",
+                            path.display(),
+                            group::uid2usr(meta.uid()).unwrap(),
+                            group::gid2grp(meta.gid()).unwrap(),
+                            group::uid2usr(dest_uid).unwrap(),
+                            group::gid2grp(dest_gid).unwrap()
+                        );
+                    };
+                }
+            }
+            ret = 1;
+        } else {
+            let changed = dest_uid != meta.uid() || dest_gid != meta.gid();
+            if changed {
+                match self.verbosity {
+                    Changes | Verbose => {
+                        println!(
+                            "changed ownership of {} from {}:{} to {}:{}",
+                            path.display(),
+                            group::uid2usr(meta.uid()).unwrap(),
+                            group::gid2grp(meta.gid()).unwrap(),
+                            group::uid2usr(dest_uid).unwrap(),
+                            group::gid2grp(dest_gid).unwrap()
+                        );
+                    },
+                    _ => ()
+                };
+            } else if self.verbosity == Verbose {
+                println!(
+                    "ownership of {} retained as {}:{}",
+                    path.display(),
+                    group::uid2usr(dest_uid).unwrap(),
+                    group::gid2grp(dest_gid).unwrap()
+                );
+            }
+        }
+        ret
+    }
+
+    #[inline]
+    fn matched(&self, uid: uid_t, gid: gid_t) -> bool {
+        match self.filter {
+            IfFrom::All => true,
+            IfFrom::User(u) => u == uid,
+            IfFrom::Group(g) => g == gid,
+            IfFrom::UserGroup(u, g) => u == uid && g == gid
+        }
     }
 }
 
@@ -87,3 +303,4 @@ pub struct Options {
     pub traverse_all: bool,       // -L
     pub traverse_none: bool,      // -P
 }
+
