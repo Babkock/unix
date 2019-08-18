@@ -11,7 +11,8 @@ extern crate clap;
 
 use clap::{Arg, App};
 use chown::{Options, Verbosity};
-use std::io;
+use std::{io, env};
+use std::env::Args;
 use std::io::{Error, ErrorKind};
 
 fn main() -> io::Result<()> {
@@ -101,12 +102,19 @@ fn main() -> io::Result<()> {
     if matches.occurrences_of("spec") != 0 && matches.occurrences_of("FILE") == 0 {
         files.push(matches.value_of("spec").unwrap().to_string());
 
-        // worry about this later
+        if matches.occurrences_of("reference") == 0 {
+            return Err(Error::new(ErrorKind::Other, "Please specify an OWNER:GROUP argument or a reference"));
+        }
     }
     else if matches.occurrences_of("spec") != 0 && matches.occurrences_of("FILE") != 0 {
         files.push(matches.value_of("FILE").unwrap().to_string());
     }
+    else {
+        return Err(Error::new(ErrorKind::Other, format!("{}: missing operand - Try '{} --help' for more information.", env::args().nth(0).unwrap(), env::args().nth(0).unwrap())));
+    }
     
+    println!("yay");
+
     /* match matches.value_of("FILE") {
         None => {
             return 1;

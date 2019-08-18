@@ -232,7 +232,11 @@ impl Owner {
         ret
     }
 
-    fn obtain_meta<P: AsRef<Path>>(&self, path: P, follow: bool) -> Option<Metadata> {
+    fn obtain_meta<P: AsRef<Path>>(
+        &self,
+        path: P,
+        follow: bool
+    ) -> Option<Metadata> {
         use self::Verbosity::*;
         let path = path.as_ref();
         let meta = if follow {
@@ -255,7 +259,12 @@ impl Owner {
         Some(meta)
     }
 
-    fn wrap_chown<P: AsRef<Path>>(&self, path: P, meta: &Metadata, follow: bool) -> i32 {
+    fn wrap_chown<P: AsRef<Path>>(
+        &self,
+        path: P,
+        meta: &Metadata,
+        follow: bool
+    ) -> i32 {
         use self::Verbosity::*;
         let mut ret = 0;
         let dest_uid = self.dest_uid.unwrap_or(meta.uid());
@@ -341,6 +350,7 @@ pub fn resolve_relative_path(path: &Path) -> Cow<Path> {
     result.into()
 }
 
+/* do you know what this is? the future */
 pub fn resolve<P: AsRef<Path>>(original: P) -> io::Result<PathBuf> {
     const MAX_LINKS: u32 = 255;
     let mut followed = 0;
@@ -374,14 +384,14 @@ pub fn resolve<P: AsRef<Path>>(original: P) -> io::Result<PathBuf> {
 }
 
 pub fn canonicalize<P: AsRef<Path>>(
-    original: P,
+    orig: P,
     can_mode: CanonicalizeMode
 ) -> io::Result<PathBuf> {
-    let original = original.as_ref();
-    let original = if original.is_absolute() {
-        original.to_path_buf()
+    let orig = orig.as_ref();
+    let orig = if orig.is_absolute() {
+        orig.to_path_buf()
     } else {
-        env::current_dir().unwrap().join(original)
+        env::current_dir().unwrap().join(orig)
     };
 
     let mut result: PathBuf = PathBuf::new();
@@ -389,25 +399,25 @@ pub fn canonicalize<P: AsRef<Path>>(
 
     /* split path by directory separator; add root directory to final path
      * buffer; add remaining parts to temporary vector for canonicalization */
-    for part in original.components() {
-        match part {
+    for p in orig.components() {
+        match p {
             Component::Prefix(_) | Component::RootDir => {
-                result.push(part.as_os_str());
+                result.push(p.as_os_str());
             }
             Component::CurDir => (),
             Component::ParentDir => {
                 parts.pop();
             }
             Component::Normal(_) => {
-                parts.push(part.as_os_str());
+                parts.push(p.as_os_str());
             }
         }
     }
 
     /* resolve symlinks where possible */
     if !parts.is_empty() {
-        for part in parts[..parts.len() - 1].iter() {
-            result.push(part);
+        for p in parts[..parts.len() - 1].iter() {
+            result.push(p);
 
             if can_mode == CanonicalizeMode::None {
                 continue;
