@@ -111,7 +111,7 @@ fn t_file_size() {
 
     let size = display_file_size(&m, &o);
     
-    assert_eq!(size, "298");
+    assert_eq!(size, "344");
 }
 
 #[test]
