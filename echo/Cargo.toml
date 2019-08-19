@@ -4,4 +4,8 @@ version = "0.1.0"
 authors = ["Tanner Babcock <babkock@gmail.com>"]
 edition = "2018"
 
+[profile.release]
+lto = true
+panic = 'abort'
+
 [dependencies]

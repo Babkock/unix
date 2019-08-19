@@ -6,7 +6,7 @@
  * MIT License.
 */
 //!
-//! # *`chown`*
+//! # **`chown`**
 //! 
 //! Change owner and group of specified file or directory.
 //!
@@ -462,4 +462,6 @@ pub fn canonicalize<P: AsRef<Path>>(
     }
     Ok(result)
 }
+
+mod tests;
 

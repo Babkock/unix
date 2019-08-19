@@ -24,13 +24,6 @@ declare -a multi_source_programs=("cat" "chown" "ls")
 # programs that have tests written for them
 declare -a tested_programs=("cat" "chown" "ls")
 
-contains() {
-	local e match="$1"
-	shift
-	for e; do [[ "$e" == "$match" ]] && return 0; done
-	return 1
-}
-
 if [ -z $1 ]; then
 	for i in "${programs[@]}"; do
 		pushd "$i" > /dev/null
@@ -95,9 +88,8 @@ else
 			printf "\e[93;1mBuilding %s\n" "$i"
 			cargo build --release
 			if [ $? == 0 ]; then
-				if [ contains "$i" "${multi_source_programs[@]}" == 1 ]; then
-					cp "target/release/main" ../build/$i
-				else
+				cp "target/release/main" ../build/$i
+				if [ $? == 1 ]; then
 					cp "target/release/$i" ../build
 				fi
 			else
