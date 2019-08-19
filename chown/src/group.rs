@@ -29,6 +29,8 @@ impl Passwd {
         cstr2cow!(self.inner.pw_name)
     }
 
+    /* the only difference between this group.rs and the one for ls, is
+     * the uid() for Passwd, and the gid() for Group */
     pub fn uid(&self) -> uid_t {
         self.inner.pw_uid
     }
