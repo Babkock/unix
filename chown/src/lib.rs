@@ -5,6 +5,21 @@
  * Copyright (c) 2019 Tanner Babcock.
  * MIT License.
 */
+//!
+//! # *`chown`*
+//! 
+//! Change owner and group of specified file or directory.
+//!
+//! ```rustc
+//! extern crate chown;
+//! ```
+//!
+//! ```
+//! $ chown -R user:audio ~/Music
+//! $ chown you:you your_stuff
+//! $ sudo chown root:root whatever
+//! ```
+//!
 extern crate libc;
 extern crate walkdir;
 
@@ -27,6 +42,7 @@ pub const FTS_COMFOLLOW: u8 = 1;
 pub const FTS_PHYSICAL: u8 = 1 << 1;
 pub const FTS_LOGICAL: u8 = 1 << 2;
 
+/// The verbosity level of the object
 #[derive(Clone, PartialEq, Debug)]
 pub enum Verbosity {
     Silent,
@@ -35,6 +51,7 @@ pub enum Verbosity {
     Normal
 }
 
+/// An enum that denotes the syntax for "spec". Just user, just group, both, or neither.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum IfFrom {
     All,
@@ -43,6 +60,7 @@ pub enum IfFrom {
     UserGroup(u32, u32),
 }
 
+/// CanonicalizeMode is used for resolve() and resolve_relative_path().
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CanonicalizeMode {
     None,
@@ -51,6 +69,8 @@ pub enum CanonicalizeMode {
     Missing
 }
 
+/// A Chowner object to be executed at runtime - contains target owner and group, verbosity, files
+/// affected, filter, bit flag, and switches for recursive mode, preserve root, and dereference
 #[derive(Clone, PartialEq, Debug)]
 pub struct Owner {
     pub dest_uid: Option<u32>,
@@ -73,6 +93,8 @@ macro_rules! unwrap {
     )
 }
 
+/// Parse a formatted spec string from the command line, the OWNER:GROUP string. Determines how
+/// many, and if any arguments have been supplied
 pub fn parse_spec(spec: &str) -> Result<(Option<u32>, Option<u32>), String> {
     let args = spec.split(':').collect::<Vec<_>>();
     let usr_only: bool = args.len() == 1;
@@ -112,6 +134,7 @@ pub fn parse_spec(spec: &str) -> Result<(Option<u32>, Option<u32>), String> {
 }
 
 impl Owner {
+    /// Executes an Owner for the chown() operation.
     pub fn exec(&self) -> i32 {
         let mut ret = 0;
         for f in &self.files {
@@ -120,6 +143,8 @@ impl Owner {
         ret
     }
 
+    // Not public: the internal chown: takes a path, destination user and group IDs, and whether or
+    // not to follow symlinks
     fn chown<P: AsRef<Path>>(
         &self,
         path: P,
@@ -215,6 +240,7 @@ impl Owner {
         ret
     }
 
+    // Obtain metadata from a specific path
     fn obtain_meta<P: AsRef<Path>>(
         &self,
         path: P,
@@ -310,6 +336,7 @@ impl Owner {
     }
 }
 
+/// Not my function, taken from uucore
 pub fn resolve_relative_path(path: &Path) -> Cow<Path> {
     if path.components().all(|e| e != Component::ParentDir) {
         return path.into();
@@ -333,7 +360,7 @@ pub fn resolve_relative_path(path: &Path) -> Cow<Path> {
     result.into()
 }
 
-/* do you know what this is? the future */
+/// Not mine either
 pub fn resolve<P: AsRef<Path>>(original: P) -> io::Result<PathBuf> {
     const MAX_LINKS: u32 = 255;
     let mut followed = 0;
@@ -366,6 +393,7 @@ pub fn resolve<P: AsRef<Path>>(original: P) -> io::Result<PathBuf> {
     Ok(result)
 }
 
+/// Not my function: Canonicalizes a path given original path and CanonicalizeMode
 pub fn canonicalize<P: AsRef<Path>>(
     orig: P,
     can_mode: CanonicalizeMode
