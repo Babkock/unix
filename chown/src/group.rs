@@ -32,10 +32,6 @@ impl Passwd {
     pub fn uid(&self) -> uid_t {
         self.inner.pw_uid
     }
-
-    pub fn gid(&self) -> gid_t {
-        self.inner.pw_gid
-    }
 }
 
 pub struct Group {

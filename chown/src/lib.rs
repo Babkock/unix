@@ -53,15 +53,15 @@ pub enum CanonicalizeMode {
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Owner {
-    dest_uid: Option<u32>,
-    dest_gid: Option<u32>,
-    bit_flag: u8,
-    verbosity: Verbosity,
-    filter: IfFrom,
-    files: Vec<String>,
-    recurse: bool,
-    preserve_root: bool,
-    dereference: bool
+    pub dest_uid: Option<u32>,
+    pub dest_gid: Option<u32>,
+    pub bit_flag: u8,
+    pub verbosity: Verbosity,
+    pub filter: IfFrom,
+    pub files: Vec<String>,
+    pub recurse: bool,
+    pub preserve_root: bool,
+    pub dereference: bool
 }
 
 macro_rules! unwrap {

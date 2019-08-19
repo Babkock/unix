@@ -18,7 +18,7 @@ use std::os::unix::fs::MetadataExt;
 
 fn main() -> io::Result<()> {
     let matches = App::new("chown").about("Change the file owner and group")
-        .template("{bin} - {about}\nUSAGE:\n\t{bin} [OPTION]... [OWNER][:[GROUP]] FILE...\n\t{bin} [OPTION]... --reference=RFILE FILE...\n\nFLAGS:\n{flags}\nOPTIONS:\n{options}\n")
+        .template("{bin} - {about}\nUSAGE:\n\t{bin} [OPTION]... [OWNER][:[GROUP]] FILE...\n\t{bin} [OPTION]... --reference=RFILE FILE...\n\nFLAGS:\n\n{flags}\n\nOPTIONS:\n\n{options}\n")
         // this first argument, the "user:group" string, will get passed to parse_spec
         .arg(Arg::with_name("spec")
              .help("Specification string in format OWNER:GROUP")
@@ -101,30 +101,32 @@ fn main() -> io::Result<()> {
 
     let mut files: Vec<String> = Vec::new();
 
-    let mut bit_flag: u8 = FTS_PHYSICAL;
-    let mut preserve_root: bool = false;
-    let mut derefer: i8 = -1;
-    let flags: &[char] = &['H', 'L', 'P'];
+    let mut bit_flag: u8;
+    let preserve_root: bool = if matches.occurrences_of("no-preserve-root") != 0 {
+        false
+    } else if matches.occurrences_of("preserve-root") != 0 {
+        true
+    } else {
+        false
+    };
+    let mut derefer: i8 = if matches.occurrences_of("dereference") != 0 {
+        1
+    } else if matches.occurrences_of("no-dereference") != 0 {
+        0
+    } else {
+        -1
+    };
+    //let flags: &[char] = &['H', 'L', 'P'];
 
-    for opt in env::args() {
-        match opt.as_str() {
-            s if s.contains(flags) => {
-                if let Some(idx) = s.rfind(flags) {
-                    match s.chars().nth(idx).unwrap() {
-                        'H' => bit_flag = FTS_COMFOLLOW | FTS_PHYSICAL,
-                        'L' => bit_flag = FTS_LOGICAL,
-                        'P' => bit_flag = FTS_PHYSICAL,
-                        _ => (),
-                    }
-                }
-            }
-            "--no-preserve-root" => preserve_root = false,
-            "--preserve-root" => preserve_root = true,
-            "--dereference" => derefer = 1,
-            "--no-dereference" => derefer = 0,
-            _ => ()
-        }
-    }
+    bit_flag = if matches.occurrences_of("traverse") != 0 {
+        FTS_COMFOLLOW | FTS_PHYSICAL
+    } else if matches.occurrences_of("traverse-all") != 0 {
+        FTS_LOGICAL
+    } else if matches.occurrences_of("no-traverse") != 0 {
+        FTS_PHYSICAL
+    } else {
+        FTS_PHYSICAL
+    };
 
     let recurse: bool = if matches.occurrences_of("recursive") != 0 {
         true
@@ -149,7 +151,9 @@ fn main() -> io::Result<()> {
     }
     else if matches.occurrences_of("spec") != 0 && matches.occurrences_of("FILE") != 0 {
         match matches.value_of("FILE") {
-            None => { },
+            None => {
+                files.push(matches.value_of("spec").unwrap().to_string());
+            },
             Some(n) => {
                 files.push(n.to_string());
             }
@@ -199,7 +203,7 @@ fn main() -> io::Result<()> {
             }
         }
     } else {
-        match parse_spec(&matches.value_of("from").unwrap()) {
+        match parse_spec(&matches.value_of("spec").unwrap()) {
             Ok((u, g)) => {
                 dest_uid = u;
                 dest_gid = g;
