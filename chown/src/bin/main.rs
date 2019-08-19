@@ -10,13 +10,15 @@ extern crate chown;
 extern crate clap;
 
 use clap::{Arg, App};
-use chown::{Options, Verbosity};
-use std::{io, env};
+use chown::{Verbosity, Owner, IfFrom, parse_spec, FTS_COMFOLLOW, FTS_PHYSICAL, FTS_LOGICAL};
+use std::{io, fs, env};
 use std::env::Args;
 use std::io::{Error, ErrorKind};
+use std::os::unix::fs::MetadataExt;
 
 fn main() -> io::Result<()> {
     let matches = App::new("chown").about("Change the file owner and group")
+        .template("{bin} - {about}\nUSAGE:\n\t{bin} [OPTION]... [OWNER][:[GROUP]] FILE...\n\t{bin} [OPTION]... --reference=RFILE FILE...\n\nFLAGS:\n{flags}\nOPTIONS:\n{options}\n")
         // this first argument, the "user:group" string, will get passed to parse_spec
         .arg(Arg::with_name("spec")
              .help("Specification string in format OWNER:GROUP")
@@ -99,32 +101,67 @@ fn main() -> io::Result<()> {
 
     let mut files: Vec<String> = Vec::new();
 
-    if matches.occurrences_of("spec") != 0 && matches.occurrences_of("FILE") == 0 {
-        files.push(matches.value_of("spec").unwrap().to_string());
+    let mut bit_flag: u8 = FTS_PHYSICAL;
+    let mut preserve_root: bool = false;
+    let mut derefer: i8 = -1;
+    let flags: &[char] = &['H', 'L', 'P'];
 
+    for opt in env::args() {
+        match opt.as_str() {
+            s if s.contains(flags) => {
+                if let Some(idx) = s.rfind(flags) {
+                    match s.chars().nth(idx).unwrap() {
+                        'H' => bit_flag = FTS_COMFOLLOW | FTS_PHYSICAL,
+                        'L' => bit_flag = FTS_LOGICAL,
+                        'P' => bit_flag = FTS_PHYSICAL,
+                        _ => (),
+                    }
+                }
+            }
+            "--no-preserve-root" => preserve_root = false,
+            "--preserve-root" => preserve_root = true,
+            "--dereference" => derefer = 1,
+            "--no-dereference" => derefer = 0,
+            _ => ()
+        }
+    }
+
+    let recurse: bool = if matches.occurrences_of("recursive") != 0 {
+        true
+    } else {
+        false
+    };
+    if recurse {
+        if bit_flag == FTS_PHYSICAL {
+            if derefer == 1 {
+                return Err(Error::new(ErrorKind::Other, "-R --dereference requires -H or -L"));
+            }
+            derefer = 0;
+        }
+    } else {
+        bit_flag = FTS_PHYSICAL;
+    }
+
+    if matches.occurrences_of("spec") != 0 && matches.occurrences_of("FILE") == 0 {
         if matches.occurrences_of("reference") == 0 {
             return Err(Error::new(ErrorKind::Other, "Please specify an OWNER:GROUP argument or a reference"));
         }
     }
     else if matches.occurrences_of("spec") != 0 && matches.occurrences_of("FILE") != 0 {
-        files.push(matches.value_of("FILE").unwrap().to_string());
+        match matches.value_of("FILE") {
+            None => { },
+            Some(n) => {
+                files.push(n.to_string());
+            }
+        }
     }
     else {
-        return Err(Error::new(ErrorKind::Other, format!("{}: missing operand - Try '{} --help' for more information.", env::args().nth(0).unwrap(), env::args().nth(0).unwrap())));
+        return Err(Error::new(ErrorKind::Other, "Missing operand - Try with --help for more information."));
     }
     
-    println!("yay");
+    //println!("yay");
 
-    /* match matches.value_of("FILE") {
-        None => {
-            return 1;
-        },
-        Some(n) => {
-            files.push(n.to_string());
-        }
-    }; */
-
-    let mut verbosity: Verbosity = if matches.occurrences_of("changes") != 0 {
+    let verbosity: Verbosity = if matches.occurrences_of("changes") != 0 {
         Verbosity::Changes
     } else if matches.occurrences_of("silent") != 0 || matches.occurrences_of("quiet") != 0 {
         Verbosity::Silent
@@ -134,5 +171,57 @@ fn main() -> io::Result<()> {
         Verbosity::Normal
     };
 
+    let filter = if let Some(spec) = matches.value_of("from") {
+        match parse_spec(&spec) {
+            Ok((Some(uid), None)) => IfFrom::User(uid),
+            Ok((None, Some(gid))) => IfFrom::Group(gid),
+            Ok((Some(uid), Some(gid))) => IfFrom::UserGroup(uid, gid),
+            Ok((None, None)) => IfFrom::All,
+            Err(e) => {
+                return Err(Error::new(ErrorKind::Other, e));
+            }
+        }
+    }
+    else {
+        IfFrom::All
+    };
+
+    let dest_uid: Option<u32>;
+    let dest_gid: Option<u32>;
+    if let Some(file) = matches.value_of("reference") {
+        match fs::metadata(&file) {
+            Ok(meta) => {
+                dest_gid = Some(meta.gid());
+                dest_uid = Some(meta.uid());
+            },
+            Err(e) => {
+                return Err(Error::new(ErrorKind::Other, format!("failed to get attributes of {}: {}", file, e)));
+            }
+        }
+    } else {
+        match parse_spec(&matches.value_of("from").unwrap()) {
+            Ok((u, g)) => {
+                dest_uid = u;
+                dest_gid = g;
+            }
+            Err(e) => {
+                return Err(Error::new(ErrorKind::Other, e));
+            }
+        }
+    }
+    let executor: Owner = Owner {
+        bit_flag,
+        dest_uid,
+        dest_gid,
+        verbosity,
+        recurse,
+        dereference: derefer != 0,
+        filter,
+        preserve_root,
+        files
+    };
+    executor.exec();
+
     Ok(())
 }
+

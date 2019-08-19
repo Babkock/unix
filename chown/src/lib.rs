@@ -23,9 +23,9 @@ use crate::group::*;
 
 mod group;
 
-const FTS_COMFOLLOW: u8 = 1;
-const FTS_PHYSICAL: u8 = 1 << 1;
-const FTS_LOGICAL: u8 = 1 << 2;
+pub const FTS_COMFOLLOW: u8 = 1;
+pub const FTS_PHYSICAL: u8 = 1 << 1;
+pub const FTS_LOGICAL: u8 = 1 << 2;
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum Verbosity {
@@ -62,23 +62,6 @@ pub struct Owner {
     recurse: bool,
     preserve_root: bool,
     dereference: bool
-}
-
-#[derive(Clone, PartialEq, Debug)]
-pub struct Options {
-    pub files: Vec<String>,
-
-    pub from: String,
-    pub reference: String,
-
-    pub verbosity: Verbosity,
-    pub dereference: bool,        // --dereference or -h | --no-dereference
-    
-    pub no_preserve_root: bool,   // --no-preserve-root
-    pub recurse: bool,            // -R | --recursive
-    pub traverse_it: bool,        // -H
-    pub traverse_all: bool,       // -L
-    pub traverse_none: bool,      // -P
 }
 
 macro_rules! unwrap {
@@ -129,7 +112,7 @@ pub fn parse_spec(spec: &str) -> Result<(Option<u32>, Option<u32>), String> {
 }
 
 impl Owner {
-    fn exec(&self) -> i32 {
+    pub fn exec(&self) -> i32 {
         let mut ret = 0;
         for f in &self.files {
             ret |= self.traverse(f);
