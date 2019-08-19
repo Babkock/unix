@@ -5,14 +5,12 @@
  * Copyright (c) 2019 Tanner Babcock.
  * MIT License.
 */
-#![allow(unused_imports)]
 extern crate chown;
 extern crate clap;
 
 use clap::{Arg, App};
 use chown::{Verbosity, Owner, IfFrom, parse_spec, FTS_COMFOLLOW, FTS_PHYSICAL, FTS_LOGICAL};
-use std::{io, fs, env};
-use std::env::Args;
+use std::{io, fs};
 use std::io::{Error, ErrorKind};
 use std::os::unix::fs::MetadataExt;
 
