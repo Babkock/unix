@@ -202,6 +202,15 @@ fn main() -> io::Result<()> {
                 return Err(Error::new(ErrorKind::Other, format!("failed to get attributes of {}: {}", file, e)));
             }
         }
+        // in the other, this is files = matches.free;
+        match matches.value_of("spec") {
+            None => {
+                return Err(Error::new(ErrorKind::Other, "No file supplied for changing"));
+            },
+            Some(n) => {
+                files.push(n.to_string());
+            }
+        }
     } else {
         match parse_spec(&matches.value_of("spec").unwrap()) {
             Ok((u, g)) => {
