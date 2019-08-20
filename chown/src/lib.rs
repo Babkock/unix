@@ -336,7 +336,6 @@ impl Owner {
     }
 }
 
-/// Not my function, taken from uucore
 pub fn resolve_relative_path(path: &Path) -> Cow<Path> {
     if path.components().all(|e| e != Component::ParentDir) {
         return path.into();
@@ -360,7 +359,6 @@ pub fn resolve_relative_path(path: &Path) -> Cow<Path> {
     result.into()
 }
 
-/// Not mine either
 pub fn resolve<P: AsRef<Path>>(original: P) -> io::Result<PathBuf> {
     const MAX_LINKS: u32 = 255;
     let mut followed = 0;
@@ -393,7 +391,7 @@ pub fn resolve<P: AsRef<Path>>(original: P) -> io::Result<PathBuf> {
     Ok(result)
 }
 
-/// Not my function: Canonicalizes a path given original path and CanonicalizeMode
+/// Canonicalizes a path given original path and CanonicalizeMode
 pub fn canonicalize<P: AsRef<Path>>(
     orig: P,
     can_mode: CanonicalizeMode
