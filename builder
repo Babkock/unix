@@ -35,7 +35,7 @@ if [ -z $1 ]; then
 			if [ $? == 1 ]; then
 				cp "target/release/$i" ../build/$i 2> /dev/null
 			fi
-			strip --strip-all ../build/$i
+			strip --strip-all ../build/$i 2> /dev/null
 		else
 			popd > /dev/null
 			printf "\e[91;1mCrate '%s' failed to build\n" > /dev/stderr
@@ -88,10 +88,11 @@ else
 			printf "\e[93;1mBuilding %s\n" "$i"
 			cargo build --release
 			if [ $? == 0 ]; then
-				cp "target/release/main" ../build/$i
+				cp "target/release/main" ../build/$i 2> /dev/null
 				if [ $? == 1 ]; then
-					cp "target/release/$i" ../build
+					cp "target/release/$i" ../build 2> /dev/null
 				fi
+				strip --strip-all ../build/$i 2> /dev/null
 			else
 				popd > /dev/null
 				printf "\e[91;1m%s failed to build\n" "$i" > /dev/stderr

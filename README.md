@@ -8,15 +8,26 @@ This is a variety of GNU coreutils re-implemented in Rust. These examples aim to
 To compile all of the programs, run the `build.sh` script. You can also compile any of the programs individually with
 
 ```
-./build.sh programname
+$ ./builder program
 ```
 
 The compiled and stripped release binaries will be copied to the `build` directory. You can also build the documentation individually, or as a whole
-using this script. `./build.sh doc` will build docs for all of the programs.
+using this script. `./builder doc` will build docs for all of the programs.
 
 ```
-./build.sh doc programname
+$ ./builder doc program
+Building docs for program
+...
 ```
 
-This will compile the docs for the specified program, and open them in your web browser.
+This will compile the docs for the specified program, and open them in your web browser. The `builder` script is also capable of running unit
+tests for any of the programs.
+
+```
+$ ./builder test program
+Testing program
+...
+```
+
+Like with `doc`, `./builder test` will compile and test the whole group.
 

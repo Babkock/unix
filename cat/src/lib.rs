@@ -37,8 +37,7 @@ use std::os::unix::fs::FileTypeExt;
 use unix_socket::UnixStream;
 
 /// Numbering Mode.
-#[derive(PartialEq)]
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum NumMode {
     NumNull,
     NumNonEmpty,
@@ -75,8 +74,7 @@ quick_error! {
 }
 
 /// Options for output.
-#[derive(PartialEq)]
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Options {
     pub number: NumMode,     // Line numbering mode
     pub squeeze_blank: bool, // Compress repeated empty lines
@@ -91,8 +89,7 @@ pub struct Handle {
 }
 
 /// Recognized file types.
-#[derive(PartialEq)]
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Type {
     Directory,
     File,
@@ -297,8 +294,6 @@ pub fn write_file_lines(file: &str, options: &Options, state: &mut OutputState) 
             // print appropriate line ender
             writer.write_all(options.end_of_line.as_bytes())?;
             // writer.flush()?;
-            //
-            // note: you may need the interactive bit for this
 
             state.at_line_start = true;
             pos += offset;
