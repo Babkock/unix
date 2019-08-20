@@ -5,11 +5,10 @@
  * Copyright (c) 2019 Tanner Babcock.
  * MIT License.
 */
-#![allow(unused_imports)]
 use std::{env, io, process};
 use std::io::prelude::*;
-use std::io::Read;
-use std::fs::File;
+use std::io::{Read, stdin, stderr};
+//use std::fs::File;
 
 enum Mode {
     Lines(i32),
@@ -39,8 +38,8 @@ fn usage() {
 fn main() -> io::Result<()> {
     let args: Vec<_> = env::args().collect();
     let mut options: Options = Default::default();
-    let stdin = io::stdin();
-    let stderr = io::stderr();
+    let stdin = stdin();
+    let stderr = stderr();
 
     if args.len() > 1 {
         if args[1].as_bytes()[0] == '-' as u8 {

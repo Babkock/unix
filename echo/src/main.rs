@@ -14,7 +14,7 @@
 //! ```
 //!
 #![allow(unused_assignments)]
-use std::{env, process};
+use std::{char, env};
 use std::io::{self, Write};
 use std::iter::Peekable;
 use std::str::Chars;
@@ -31,7 +31,7 @@ pub fn parse(input: &mut Peekable<Chars>, base: u32, max: u32, bpd: u32) -> Opti
         }
         input.next();
     }
-    std::char::from_u32(r)
+    char::from_u32(r)
 }
 
 /// Parse string with escape sequences, and print it
@@ -109,27 +109,27 @@ fn main() -> io::Result<()> {
         println!("   -n  Don\'t print newline characters");
         println!("   -e  Interpret escape sequences in the string");
         println!("   -h  Show help");
-        process::exit(0);
     }
-
-    for (i, input) in args.iter().enumerate() {
-        if i == 0 || (i == 1 && used_option) {
-            continue;
-        }
-        if escapes {
-            quit = escaped(&input)?;
-            if quit {
-                break;
+    else {
+        for (i, input) in args.iter().enumerate() {
+            if i == 0 || (i == 1 && used_option) {
+                continue;
             }
-        }
-        else { write!(output, "{}", input)?; }
+            if escapes {
+                quit = escaped(&input)?;
+                if quit {
+                    break;
+                }
+            }
+            else { write!(output, "{}", input)?; }
 
-        if i < (args.len()-1) {
-            write!(output, " ")?;
-        }
-        else {
-            if newlines {
-                write!(output, "\n")?;
+            if i < (args.len()-1) {
+                write!(output, " ")?;
+            }
+            else {
+                if newlines {
+                    write!(output, "\n")?;
+                }
             }
         }
     }

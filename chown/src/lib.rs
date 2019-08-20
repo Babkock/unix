@@ -461,5 +461,6 @@ pub fn canonicalize<P: AsRef<Path>>(
     Ok(result)
 }
 
+#[cfg(test)]
 mod tests;
 
