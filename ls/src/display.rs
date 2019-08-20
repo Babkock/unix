@@ -5,7 +5,6 @@
  * Copyright (c) 2019 Tanner Babcock.
  * MIT License.
 */
-#![allow(unused_imports)]
 extern crate libc;
 extern crate term_grid;
 extern crate termsize;
@@ -13,20 +12,20 @@ extern crate time;
 extern crate unicode_width;
 extern crate number_prefix;
 
+use number_prefix::{Standalone, Prefixed, decimal_prefix};
+use term_grid::{Cell, Direction, Filling, Grid, GridOptions};
+use time::{strftime, Timespec};
+
 use std::{io, fs};
 use std::fs::{DirEntry, FileType, Metadata};
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
-use number_prefix::{Standalone, Prefixed, decimal_prefix};
-use term_grid::{Cell, Direction, Filling, Grid, GridOptions};
-use time::{strftime, Timespec};
 use crate::{max, Options, sort_entries, pad_left, color_name};
 use crate::file::*;
 use crate::group::*;
 
 #[cfg(windows)]
 use std::os::windows::fs::MetadataExt;
-
 #[cfg(any(unix, target_os ="redox"))]
 use std::os::unix::fs::MetadataExt;
 #[cfg(unix)]
