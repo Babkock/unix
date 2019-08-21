@@ -10,6 +10,7 @@ extern crate clap;
 
 use clap::{Arg, App};
 use ls::{Options, list};
+use std::io;
 
 fn main() -> io::Result<()> {
     let matches = App::new("ls").about("List information about the FILEs (the current directory by default)\nSort entries alphabetically if none of -cftuvSUX nor --sort is specified.")

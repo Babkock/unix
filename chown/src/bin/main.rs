@@ -114,7 +114,6 @@ fn main() -> io::Result<()> {
     } else {
         -1
     };
-    //let flags: &[char] = &['H', 'L', 'P'];
 
     bit_flag = if matches.occurrences_of("traverse") != 0 {
         FTS_COMFOLLOW | FTS_PHYSICAL
@@ -214,7 +213,7 @@ fn main() -> io::Result<()> {
             Ok((u, g)) => {
                 dest_uid = u;
                 dest_gid = g;
-            }
+            },
             Err(e) => {
                 return Err(Error::new(ErrorKind::Other, e));
             }

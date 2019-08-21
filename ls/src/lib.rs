@@ -21,10 +21,10 @@
 //! $ ls -lhaF
 //! drwxr-xr-x 3 user user  4.10K 2019-08-09 01:01 ./
 //! drwxr-xr-x 4 user user  4.10K 2019-08-06 16:58 ../
-//! -rw-r--r-- 1 user user 11.50K 2019-08-08 22:54 display.rs
-//! -rw-r--r-- 1 user user  2.67K 2019-08-08 22:57 file.rs
-//! -rw-r--r-- 1 user user  5.10K 2019-08-08 22:59 group.rs
-//! -rw-r--r-- 1 user user  6.49K 2019-08-08 22:55 lib.rs
+//! -rw-r--r-- 1 user user 12.57K 2019-08-08 22:54 display.rs
+//! -rw-r--r-- 1 user user  2.62K 2019-08-08 22:57 file.rs
+//! -rw-r--r-- 1 user user  2.75K 2019-08-08 22:59 group.rs
+//! -rw-r--r-- 1 user user  9.00K 2019-08-08 22:55 lib.rs
 //! drwxr-xr-x 2 user user  4.10K 2019-08-08 04:04 bin/
 //! ```
 //!

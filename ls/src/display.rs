@@ -16,11 +16,9 @@ use number_prefix::{Standalone, Prefixed, decimal_prefix};
 use term_grid::{Cell, Direction, Filling, Grid, GridOptions};
 use time::{strftime, Timespec};
 
-use std::{io, fs};
 use std::fs::{DirEntry, FileType, Metadata};
 use std::path::{Path, PathBuf};
-use std::time::UNIX_EPOCH;
-use crate::{max, Options, sort_entries, pad_left, color_name};
+use crate::{max, Options, pad_left, color_name};
 use crate::file::*;
 use crate::group::*;
 
@@ -35,7 +33,6 @@ use unicode_width::UnicodeWidthStr;
 
 #[cfg(unix)]
 use libc::{mode_t, S_ISGID, S_ISUID, S_IRUSR, S_IWUSR, S_ISVTX, S_IROTH, S_IRGRP, S_IWOTH, S_IWGRP, S_IXGRP, S_IXOTH, S_IXUSR};
-use libc::{time_t, c_char, c_int, gid_t, uid_t};
 
 #[cfg(unix)]
 macro_rules! has {
@@ -46,13 +43,13 @@ macro_rules! has {
 
 #[cfg(not(unix))]
 #[allow(unused_variables)]
-pub fn display_permissions(metadata: &fs::Metadata) -> String {
+pub fn display_permissions(metadata: &Metadata) -> String {
     String::from("---------")
 }
 
 /// Wrapper for display_permissions_unix in unix, prints string of hyphens on Windows
 #[cfg(unix)]
-pub fn display_permissions(metadata: &fs::Metadata) -> String {
+pub fn display_permissions(metadata: &Metadata) -> String {
     let mode: mode_t = metadata.mode() as mode_t;
     display_permissions_unix(mode as u32)
 }

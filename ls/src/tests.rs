@@ -5,14 +5,11 @@
  * Copyright (c) 2019 Tanner Babcock.
  * MIT License.
 */
-#![allow(unused_imports)]
 extern crate assert_cli;
 
 use super::*;
-use std::io;
-use std::fs::Metadata;
 use crate::Options;
-use crate::display::{display_permissions, display_file_name, display_file_size, display_uname, display_file_type, display_date};
+use crate::display::{display_permissions, display_file_size, display_uname, display_group, display_file_type, display_date};
 use crate::file::get_metadata;
 
 #[test]
@@ -118,23 +115,12 @@ fn t_file_size() {
 fn t_dir_size() {
     let o: Options = Options {
         dirs: vec![String::from(".")],
-        show_hidden: false,
-        ignore_implied: false,
-        dirs_themselves: false,
-        long_listing: false,
-        dereference: false,
-        reverse: false,
-        recurse: false,
-        sort_by_mtime: false,
-        sort_by_ctime: false,
-        sort_by_size: false,
-        no_sort: true,
-        ignore_backups: true,
-        numeric_ids: false,
-        one_file_per_line: false,
-        human_readable: false,
-        classify: false,
-        inode: false,
+        show_hidden: false, ignore_implied: false,
+        dirs_themselves: false, long_listing: false,
+        dereference: false, reverse: false, recurse: false,
+        sort_by_mtime: false, sort_by_ctime: false, sort_by_size: false, no_sort: true, ignore_backups: true,
+        numeric_ids: false, one_file_per_line: false, human_readable: false,
+        classify: false, inode: false,
         color: false
     };
 
@@ -161,23 +147,12 @@ fn t_dir_size() {
 fn t_last_modified() {
     let o: Options = Options {
         dirs: vec![String::from(".")],
-        show_hidden: false,
-        ignore_implied: false,
-        dirs_themselves: false,
-        long_listing: false,
-        dereference: false,
-        reverse: false,
-        recurse: false,
-        sort_by_mtime: true,
-        sort_by_ctime: false,
-        sort_by_size: false,
-        no_sort: false,
-        ignore_backups: true,
-        numeric_ids: false,
-        one_file_per_line: false,
-        human_readable: false,
-        classify: false,
-        inode: false,
+        show_hidden: false, ignore_implied: false, dirs_themselves: false,
+        long_listing: false, dereference: false, reverse: false,
+        recurse: false, sort_by_mtime: true, sort_by_ctime: false,
+        sort_by_size: false, no_sort: false, ignore_backups: true,
+        numeric_ids: false, one_file_per_line: false, human_readable: false,
+        classify: false, inode: false,
         color: false
     };
 
@@ -194,5 +169,61 @@ fn t_last_modified() {
     };
 
     assert!(display_date(&m, &o).contains("2019-"));
+}
+
+#[test]
+fn t_check_directories() {
+    let o: Options = Options {
+        dirs: vec![String::from(".")],
+        show_hidden: false, ignore_implied: false, dirs_themselves: false,
+        long_listing: false, dereference: false, reverse: false, recurse: false,
+        sort_by_mtime: false, sort_by_ctime: false, sort_by_size: false, no_sort: false,
+        ignore_backups: true, numeric_ids: true,
+        one_file_per_line: false, human_readable: false, classify: false,
+        inode: false,
+        color: false
+    };
+
+    let mut m = match get_metadata(&PathBuf::from("./src"), &o) {
+        Err(_e) => {
+            match get_metadata(&PathBuf::from("../src"), &o) {
+                Err(e) => {
+                    panic!("{}", e);
+                },
+                Ok(m) => m
+            }
+        },
+        Ok(m) => m
+    };
+
+    assert_eq!(display_file_type(m.file_type()), "d");
+    assert_eq!(display_file_size(&m, &o), "4096");
+    assert_eq!(display_uname(&m, &o), "1000");
+    assert_eq!(display_group(&m, &o), "1000");
+
+    m = match get_metadata(&PathBuf::from("/usr/lib/libX11.so"), &o) {
+        Err(e) => {
+            panic!("{}", e);
+        },
+        Ok(m) => m
+    };
+
+    assert!(m.file_type().is_symlink());
+    assert_eq!(display_file_type(m.file_type()), "l");
+    assert_eq!(display_permissions(&m), "rwxrwxrwx");
+    assert_eq!(display_uname(&m, &o), "0");
+    assert_eq!(display_uname(&m, &o), "0");
+    assert_eq!(display_file_size(&m, &o), "15"); // this will return 15 for this particular file
+
+    m = match get_metadata(&PathBuf::from("/usr/lib/libX11.a"), &o) {
+        Err(e) => {
+            panic!("{}", e);
+        },
+        Ok(m) => m
+    };
+
+    assert!(!m.file_type().is_symlink());
+    let b = display_file_size(&m, &o);
+    assert!(b.parse::<i32>().unwrap() > 2200000);
 }
 
