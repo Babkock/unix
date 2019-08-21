@@ -19,7 +19,6 @@
 //! $ cat file.txt > output.txt
 //! ```
 //!
-#![allow(unused_imports)]
 #[macro_use]
 extern crate quick_error;
 #[cfg(unix)]

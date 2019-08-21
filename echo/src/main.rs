@@ -15,7 +15,7 @@
 //!
 #![allow(unused_assignments)]
 use std::{char, env};
-use std::io::{self, Write};
+use std::io::{self, Write, stdout};
 use std::iter::Peekable;
 use std::str::Chars;
 
@@ -36,7 +36,7 @@ pub fn parse(input: &mut Peekable<Chars>, base: u32, max: u32, bpd: u32) -> Opti
 
 /// Parse string with escape sequences, and print it
 pub fn escaped(input: &str) -> io::Result<bool> {
-    let stdout = io::stdout();
+    let stdout = stdout();
     let mut output = stdout.lock();
     let mut quit: bool = false;
     let mut buffer = ['\\'; 2];
@@ -84,7 +84,7 @@ fn main() -> io::Result<()> {
     let mut used_option: bool = false;         // Don't print the option if the user supplied one
     let mut help: bool = false;                // Don't echo anything if -h is given
 
-    let stdout = io::stdout();
+    let stdout = stdout();
     let mut output = stdout.lock();
     let mut quit: bool = false;
 
