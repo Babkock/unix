@@ -5,7 +5,7 @@
 
 This is a variety of GNU coreutils re-implemented in Rust. These examples aim to be efficient, fast, and less complicated.
 
-To compile all of the programs, run the `build.sh` script. You can also compile any of the programs individually with
+To compile all of the programs, run the `builder` script with no arguments. You can also compile any of the programs individually with
 
 ```
 $ ./builder program
@@ -29,5 +29,5 @@ Testing program
 ...
 ```
 
-Like with `doc`, `./builder test` will compile and test the whole group.
+Like with doc, `./builder test` will compile and test the whole group.
 
