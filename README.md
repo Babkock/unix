@@ -1,6 +1,6 @@
 # unix
 
-[![Build status](https://ci.appveyor.com/api/projects/status/4j1ho78h1npu9253?svg=true)](https://ci.appveyor.com/project/Babkock/unix) [![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2FBabkock%2Funix.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2FBabkock%2Funix?ref=badge_shield)
+[![Build Status](https://travis-ci.org/Babkock/unix.svg?branch=master)](https://travis-ci.org/Babkock/unix) [![Build status](https://ci.appveyor.com/api/projects/status/4j1ho78h1npu9253?svg=true)](https://ci.appveyor.com/project/Babkock/unix) [![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2FBabkock%2Funix.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2FBabkock%2Funix?ref=badge_shield)
 
 This is a variety of GNU coreutils re-implemented in Rust. These examples aim to be efficient, fast, and less complicated.
 
