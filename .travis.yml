@@ -1,0 +1,6 @@
+language: rust
+install:
+  - ./builder
+script:
+  - ./builder test
+
