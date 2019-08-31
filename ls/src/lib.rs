@@ -17,16 +17,16 @@
 //!
 //! This command-line example uses four options: long listing, human-readable, all, and classify.
 //!
-//! ```
-//! $ ls -lhaF
-//! drwxr-xr-x 3 user user  4.10K 2019-08-09 01:01 ./
-//! drwxr-xr-x 4 user user  4.10K 2019-08-06 16:58 ../
-//! -rw-r--r-- 1 user user 12.57K 2019-08-08 22:54 display.rs
-//! -rw-r--r-- 1 user user  2.62K 2019-08-08 22:57 file.rs
-//! -rw-r--r-- 1 user user  2.75K 2019-08-08 22:59 group.rs
-//! -rw-r--r-- 1 user user  9.00K 2019-08-08 22:55 lib.rs
-//! drwxr-xr-x 2 user user  4.10K 2019-08-08 04:04 bin/
-//! ```
+//!
+//!     $ ls -lhaF
+//!     drwxr-xr-x 3 user user  4.10K 2019-08-09 01:01 ./
+//!     drwxr-xr-x 4 user user  4.10K 2019-08-06 16:58 ../
+//!     -rw-r--r-- 1 user user 12.57K 2019-08-08 22:54 display.rs
+//!     -rw-r--r-- 1 user user  2.62K 2019-08-08 22:57 file.rs
+//!     -rw-r--r-- 1 user user  2.75K 2019-08-08 22:59 group.rs
+//!     -rw-r--r-- 1 user user  9.00K 2019-08-08 22:55 lib.rs
+//!     drwxr-xr-x 2 user user  4.10K 2019-08-08 04:04 bin/
+//! 
 //!
 extern crate term_grid;
 extern crate termsize;
@@ -49,32 +49,65 @@ use std::os::unix::fs::MetadataExt;
 use std::os::windows::fs::MetadataExt;
 
 /// Big struct of all options for ls, including the specified
-/// directories themselves.
+/// directories themselves. All of these are registered from clap arguments
 #[derive(PartialEq, Debug)]
 pub struct Options {
-    pub dirs: Vec<String>,   // "required" arg, comes with no option
+    /// The directory or directories to list
+    pub dirs: Vec<String>,
     
-    pub show_hidden: bool,        // -a | --all
-    pub ignore_implied: bool,     // -A | --almost-all
+    /// Show hidden files: -a or --all
+    pub show_hidden: bool,
+    
+    /// Ignore implied . and .. entries: -A or --almost-all
+    pub ignore_implied: bool,
+    
     pub dirs_themselves: bool,    // -d | --directory
-    pub long_listing: bool,       // -l | --long
-    pub dereference: bool,        // -L | --dereference
-    pub reverse: bool,            // -r | --reverse
-    pub recurse: bool,            // -R | --recursive
+    
+    /// Classic "long listing" format, invoked with: -l or --long
+    pub long_listing: bool,
 
-    pub sort_by_mtime: bool,      // -t (sort by modification time)
-    pub sort_by_ctime: bool,      // -c (sort by change time)
-    pub sort_by_size: bool,       // -S (sort by file size)
-    pub no_sort: bool,            // -U (don't sort at all)
-    pub ignore_backups: bool,     // -B (ignore files with '~')
+    /// Dereference symbolic links: -L or --dereference
+    pub dereference: bool,
 
-    pub numeric_ids: bool,        // -n (user and group IDs)
-    pub one_file_per_line: bool,  // -1
-    pub human_readable: bool,     // -h | --human-readable
-    pub classify: bool,           // -F | --classify
-    pub inode: bool,              // -i | --inode
+    /// Show entries in reverse order: -r or --reverse
+    pub reverse: bool,
 
-    pub color: bool,              // --color
+    /// Recurse into sub-directories: -R or --recursive
+    pub recurse: bool,
+
+    /// Sort by modification time: -m or --mtime
+    pub sort_by_mtime: bool,
+
+    /// Sort by ctime: -c or --ctime
+    pub sort_by_ctime: bool,
+
+    /// Sort by file size: -S or --filesize
+    pub sort_by_size: bool,
+
+    /// Don't sort at all: -U or --none
+    pub no_sort: bool,
+
+    /// Ignore implied entries ending in '~': -B or --ignore-backups
+    pub ignore_backups: bool,
+
+    /// Use numeric IDs for users and groups: -n or --numeric-uid-gid
+    pub numeric_ids: bool,
+
+    /// One file per line: -1
+    pub one_file_per_line: bool,
+    
+    /// Use human-readable file sizes, i.e. 2.4 K instead of 26850: -h or --human-readable
+    pub human_readable: bool,
+    
+    /// Classify certain entries with a symbol (/ for directories, | for pipes, * for executables,
+    /// etc): -F or --classify
+    pub classify: bool,
+    
+    /// Print the index number (inode) of each file: -i or --inode
+    pub inode: bool,
+
+    /// Use colors: --color
+    pub color: bool,
 }
 
 mod display;

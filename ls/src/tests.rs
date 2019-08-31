@@ -5,8 +5,7 @@
  * Copyright (c) 2019 Tanner Babcock.
  * MIT License.
 */
-extern crate assert_cli;
-
+use std::env;
 use super::*;
 use crate::Options;
 use crate::display::{display_permissions, display_file_size, display_uname, display_group, display_file_type, display_date};
@@ -198,8 +197,15 @@ fn t_check_directories() {
 
     assert_eq!(display_file_type(m.file_type()), "d");
     assert_eq!(display_file_size(&m, &o), "4096");
-    assert_eq!(display_uname(&m, &o), "1000");
-    assert_eq!(display_group(&m, &o), "1000");
+    
+    if env::var("USER").unwrap() == "travis" {
+        assert_eq!(display_uname(&m, &o), "2000");
+        assert_eq!(display_group(&m, &o), "2000");
+    }
+    else {
+        assert_eq!(display_uname(&m, &o), "1000");
+        assert_eq!(display_group(&m, &o), "1000");
+    }
 
     m = match get_metadata(&PathBuf::from("/usr/lib/libX11.so"), &o) {
         Err(e) => {
