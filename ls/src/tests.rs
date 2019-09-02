@@ -208,8 +208,13 @@ fn t_check_directories() {
     }
 
     m = match get_metadata(&PathBuf::from("/usr/lib/libX11.so"), &o) {
-        Err(e) => {
-            panic!("{}", e);
+        Err(_e) => {
+            match get_metadata(&PathBuf::from("/usr/lib/libc.so"), &o) {
+                Err(e) => {
+                    panic!("{}", e);
+                },
+                Ok(m) => m
+            }
         },
         Ok(m) => m
     };
