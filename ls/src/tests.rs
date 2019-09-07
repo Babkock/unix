@@ -226,15 +226,17 @@ fn t_check_directories() {
     assert_eq!(display_uname(&m, &o), "0");
     assert_eq!(display_file_size(&m, &o), "15"); // this will return 15 for this particular file
 
-    m = match get_metadata(&PathBuf::from("/usr/lib/libX11.a"), &o) {
-        Err(e) => {
-            panic!("{}", e);
-        },
-        Ok(m) => m
-    };
+    if env::var("USER").unwrap() == "travis" {
+        m = match get_metadata(&PathBuf::from("/usr/lib/libX11.a"), &o) {
+            Err(e) => {
+                panic!("{}", e);
+            },
+            Ok(m) => m
+        };
 
-    assert!(!m.file_type().is_symlink());
-    let b = display_file_size(&m, &o);
-    assert!(b.parse::<i32>().unwrap() > 2200000);
+        assert!(!m.file_type().is_symlink());
+        let b = display_file_size(&m, &o);
+        assert!(b.parse::<i32>().unwrap() > 2200000);
+    }
 }
 
